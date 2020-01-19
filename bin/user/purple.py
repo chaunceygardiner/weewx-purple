@@ -35,7 +35,7 @@ Add a comma and "user.purple.Purple" (don't include the quotes) to the end of th
     port = 80
     timeout = 15
     purple_proxy_hostname = myserver.foobar.com
-    purple_porxy_port = 8000
+    purple_proxy_port = 8000
     purple_proxy_timeout = 5
 
 [DataBindings]
