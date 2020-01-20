@@ -30,6 +30,9 @@ Note: The above command assumes a WeeWX installation of `/home/weewx` and
       that this extension was downloaded to `~/software/weewx-purple`.
       Adjust the command as necessary.
 
+2. To get average readings over the archive period and to not miss any
+   data when weewx is down, install [purple-proxy](https://github.com/chaunceygardiner/purple-proxy).
+
 # How to access weewx-purple fields in reports.
 
 Detailed instructions are pending, below is a quick and dirty set of instructions.
