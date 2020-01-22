@@ -44,3 +44,7 @@ an outdoor PurpleAir sensor), use the following:
 ```
 $latest('purple_binding').pm2_5_aqi_avg
 ```
+
+## Licensing
+
+weewx-purple is licensed under the GNU Public License v3.
