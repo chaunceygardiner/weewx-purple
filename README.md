@@ -18,31 +18,48 @@ missing data.  Furthermore, if the PurpleAir device has two sensors,
 `purple-proxy` adds average fields for those sensor readings.
 
 See `weewx-purple` and `purple-proxy` in action on the following pages:
-* [Weatherbaord(TM) Report](https://www.paloaltoweather.com/weatherboard.html)
+* [Weatherbaord(TM) Report](https://www.paloaltoweather.com/weatherboard/)
 * [LiveSeasons Report](https://www.paloaltoweather.com/index.html).
 
 # Installation Instructions
+
+1. cd to the directory where this extension was cloned from github, for example:
+   `cd ~/software/weewx-purple
+
 1. Run the following command.
 
-`sudo /home/weewx/bin/wee_extension --install ~/software/weewx-purple`
+   `sudo /home/weewx/bin/wee_extension --install .`
 
-Note: The above command assumes a WeeWX installation of `/home/weewx` and
-      that this extension was downloaded to `~/software/weewx-purple`.
+    Note: The above command assumes a WeeWX installation of `/home/weewx`.
       Adjust the command as necessary.
 
-2. To get average readings over the archive period and to not miss any
-   data when weewx is down, install [purple-proxy](https://github.com/chaunceygardiner/purple-proxy).
+1. To get average readings over the archive period and to not miss archive
+   periods when WeeWX isn't running, install
+   [purple-proxy](https://github.com/chaunceygardiner/purple-proxy).
 
 # How to access weewx-purple fields in reports.
 
 Detailed instructions are pending, below is a quick and dirty set of instructions.
-At prsent, one will need to browse the code for more detail.
+At present, one will need to browse the code for more detail.
 
-To report the AQI average (averaged between the sensor and the 'B' sensor of
-an outdoor PurpleAir sensor), use the following:
+For PurpleAir outdoor sensors, to report the AQI average of the A and B sensors,
+use the following:
 
 ```
 $latest('purple_binding').pm2_5_aqi_avg
+```
+
+To report on just the A sensor in the outdoor sensor, or the only sensor in an
+indoor sensor, use the following:
+
+```
+$latest('purple_binding').pm2_5_aqi
+```
+
+Lastly, to report on just the B sensor in the outdoor sensor, use the following:
+
+```
+$latest('purple_binding').pm2_5_aqi_b
 ```
 
 ## Licensing
