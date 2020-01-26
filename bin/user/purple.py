@@ -20,35 +20,40 @@ Loosely modeled after Kenneth Baker's weewx-purpleair WeeWX plugin.
 
 Installation instructions.
 
-1. cp bin/user/purple.py to the /home/weewx/bin/user directory.
+1. cd to the directory where this extension was cloned from github, for example:
+   cd ~/software/weewx-purple
+
+2. Run the following command.
+
+   sudo /home/weewx/bin/wee_extension --install .
+
+    Note: The above command assumes a WeeWX installation of `/home/weewx`.
+          Adjust the command as necessary.
+
+3. Edit the `Purple` section of weewx.conf (which was created by the install
+   above.
 
 
-Service Configuration
+   [Purple]
+       data_binding = purple_binding
+       hostname = purple-air
+       port = 80
+       timeout = 15
+       purple_proxy_hostname = myserver.foobar.com
+       purple_proxy_port = 8000
+       purple_proxy_timeout = 5
 
-Add the following to weewx.conf:
+   [DataBindings]
+       [[purple_binding]]
+           manager = weewx.manager.DaySummaryManager
+           schema = user.purple.schema
+           table_name = archive
+           database = purple_sqlite
 
-Add a comma and "user.purple.Purple" (don't include the quotes) to the end of the line that begins with "archive_services =".
-
-[Purple]
-    data_binding = purple_binding
-    hostname = purple-air
-    port = 80
-    timeout = 15
-    purple_proxy_hostname = myserver.foobar.com
-    purple_proxy_port = 8000
-    purple_proxy_timeout = 5
-
-[DataBindings]
-    [[purple_binding]]
-        manager = weewx.manager.DaySummaryManager
-        schema = user.purple.schema
-        table_name = archive
-        database = purple_sqlite
-
-[Databases]
-    [[purple_sqlite]]
-        database_name = purple.sdb
-        database_type = SQLite
+   [Databases]
+       [[purple_sqlite]]
+           database_name = purple.sdb
+           database_type = SQLite
 
 """
 
@@ -77,9 +82,9 @@ log = logging.getLogger(__name__)
 
 WEEWX_PURPLE_VERSION = "1.0"
 
-if weewx.__version__ < "3":
-    raise weewx.UnsupportedFeature("weewx 3 is required, found %s" %
-                                   weewx.__version__)
+if weewx.__version__ < "4":
+    raise weewx.UnsupportedFeature(
+        "WeeWX 4 is required, found %s" % weewx.__version__)
 
 # set up appropriate units
 weewx.units.USUnits['group_concentration'] = 'microgram_per_meter_cubed'

@@ -24,7 +24,7 @@ See `weewx-purple` and `purple-proxy` in action on the following pages:
 # Installation Instructions
 
 1. cd to the directory where this extension was cloned from github, for example:
-   `cd ~/software/weewx-purple
+   `cd ~/software/weewx-purple`
 
 1. Run the following command.
 
@@ -32,6 +32,20 @@ See `weewx-purple` and `purple-proxy` in action on the following pages:
 
     Note: The above command assumes a WeeWX installation of `/home/weewx`.
       Adjust the command as necessary.
+
+1. Edit the `Purple` section of weewx.conf (which was created by the install
+   above.
+
+   ```
+   [Purple]
+       data_binding = purple_binding
+       hostname = purple-air.amarillo.johnkline.com
+       port = 80
+       timeout = 15
+       purple_proxy_hostname = ella.amarillo.johnkline.com
+       purple_proxy_port = 8000
+       purple_proxy_timeout = 5
+   ```
 
 1. To get average readings over the archive period and to not miss archive
    periods when WeeWX isn't running, install
