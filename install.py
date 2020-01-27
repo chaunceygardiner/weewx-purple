@@ -30,13 +30,32 @@ class PurpleInstaller(ExtensionInstaller):
             archive_services='user.purple.Purple',
             config={
                 'Purple': {
-                    'data_binding': 'purple_binding',
-                    'hostname': 'purple-air',
-                    'port': '80',
-                    'timeout': '15',
-                    'purple_proxy_hostname': 'purple-proxy',
-                    'purple_proxy_port': '8000',
-                    'purple_proxy_timeout': '5'},
+                    'data_binding'   : 'purple_binding',
+                    'PrimarySensor'  : {
+                        'enable'     : True,
+                        'hostname'   : 'purple-air',
+                        'port'       : '80',
+                        'timeout'    : '15',
+                    },
+                    'SecondarySensor': {
+                        'enable'     : False,
+                        'hostname'   : 'purple-air2',
+                        'port'       : '80',
+                        'timeout'    : '15',
+                    },
+                    'PrimaryProxy'  : {
+                        'enable'     : False,
+                        'hostname'   : 'proxy',
+                        'port'       : '8000',
+                        'timeout'    : '5',
+                    },
+                    'SecondaryProxy'  : {
+                        'enable'     : False,
+                        'hostname'   : 'proxy2',
+                        'port'       : '8000',
+                        'timeout'    : '5',
+                    },
+                },
                 'DataBindings': {
                     'purple_binding': {
                         'manager': 'weewx.manager.DaySummaryManager',

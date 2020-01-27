@@ -34,17 +34,35 @@ See `weewx-purple` and `purple-proxy` in action on the following pages:
       Adjust the command as necessary.
 
 1. Edit the `Purple` section of weewx.conf (which was created by the install
-   above.
+   above).  Up to two PurpleAir sensors can be configured, as well as up to two
+   purple proxies.  Note: the order in which sensors/proxies are interrogated
+   is: `PrimaryProxy`, `SecondaryProxy`, `PrimarySensor`, `SecondarySensor`.
+   The first sensor/proxy that answers is the one used to answer the WeeWX
+   request.
 
    ```
    [Purple]
        data_binding = purple_binding
-       hostname = purple-air.amarillo.johnkline.com
-       port = 80
-       timeout = 15
-       purple_proxy_hostname = ella.amarillo.johnkline.com
-       purple_proxy_port = 8000
-       purple_proxy_timeout = 5
+       [[PrimarySensor]]
+           enable = true
+           hostname = purple-air
+           port = 80
+           timeout = 15
+       [[SecondarySensor]]
+           enable = false
+           hostname = purple-air2
+           port = 80
+           timeout = 15
+       [[PrimaryProxy]]
+           enable = false
+           hostname = proxy
+           port = 8000
+           timeout = 5
+       [[SecondaryProxy]]
+           enable = false
+           hostname = proxy2
+           port = 8000
+           timeout = 5
    ```
 
 1. To get average readings over the archive period and to not miss archive

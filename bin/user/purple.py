@@ -36,12 +36,26 @@ Installation instructions.
 
    [Purple]
        data_binding = purple_binding
-       hostname = purple-air
-       port = 80
-       timeout = 15
-       purple_proxy_hostname = myserver.foobar.com
-       purple_proxy_port = 8000
-       purple_proxy_timeout = 5
+       [[PrimarySensor]]
+           enable = true
+           hostname = purple-air
+           port = 80
+           timeout = 15
+       [[SecondarySensor]]
+           enable = false
+           hostname = purple-air2
+           port = 80
+           timeout = 15
+       [[PrimaryProxy]]
+           enable = false
+           hostname = proxy
+           port = 8000
+           timeout = 5
+       [[SecondaryProxy]]
+           enable = false
+           hostname = proxy2
+           port = 8000
+           timeout = 5
 
    [DataBindings]
        [[purple_binding]]
@@ -73,7 +87,10 @@ from dateutil.parser import parse
 
 import weewx
 import weeutil.weeutil
+
 from weeutil.weeutil import timestamp_to_string
+from weeutil.weeutil import to_bool
+from weeutil.weeutil import to_int
 from weewx.engine import StdService
 import weewx.units
 from six.moves import range
@@ -85,6 +102,24 @@ WEEWX_PURPLE_VERSION = "1.0"
 if weewx.__version__ < "4":
     raise weewx.UnsupportedFeature(
         "WeeWX 4 is required, found %s" % weewx.__version__)
+
+class Source:
+    def __init__(self, config_dict, name, is_proxy):
+        self.is_proxy = is_proxy
+        try:
+            source_dict = config_dict.get(name, {})
+            self.enable = to_bool(source_dict.get('enable')),
+            self.hostname = source_dict['hostname']
+            if is_proxy:
+                self.port = to_int(source_dict.get('port', 8000))
+            else:
+                self.port = to_int(source_dict.get('port', 80))
+            self.timeout  = to_int(source_dict.get('timeout', 10))
+        except KeyError as e:
+            self.enable = False
+            self.hostname = None
+            self.port = None
+            self.timeout = None
 
 # set up appropriate units
 weewx.units.USUnits['group_concentration'] = 'microgram_per_meter_cubed'
@@ -169,9 +204,8 @@ def utc_now():
     tzinfos = {'CST': tz.gettz("UTC")}
     return datetime.datetime.now(tz=tz.gettz("UTC"))
 
-def collect_data(hostname, port, timeout,
-                 archive_interval, now_ts = None, purple_proxy_hostname = None,
-                 purple_proxy_port = None, purple_proxy_timeout = None):
+def collect_data(hostname, port, timeout, archive_interval, now_ts = None,
+                 proxy = False):
 
     if now_ts is None:
         now_ts = int(time.time() + 0.5)
@@ -180,46 +214,41 @@ def collect_data(hostname, port, timeout,
     now_ts = int(now_ts / archive_interval) * archive_interval # kill seconds
 
     j = None
-    if purple_proxy_hostname is not None:
-        try:
-            # fetch data
-            log.debug('collect_data: fetching data from: %s:%s timeout(%d)' % (
-                purple_proxy_hostname, purple_proxy_port, purple_proxy_timeout))
-            url = 'http://%s:%s/fetch-current-record' % (
-                purple_proxy_hostname, purple_proxy_port)
-            log.debug('collect_data: fetching from url: %s' % url)
-            r = requests.get(url=url, timeout=purple_proxy_timeout)
-            log.debug('collect_data: %s returned %r' % (
-                purple_proxy_hostname, r))
-            if r:
-                # convert to json
-                j = r.json()
-                log.debug('collect_data: json returned from %s is: %r' % (purple_proxy_hostname, j))
-                # The reading could be old.  Check that it's not older than now - arcint
+    if proxy:
+        url = 'http://%s:%s/fetch-current-record' % (hostname, port)
+    else:
+        url = 'http://%s:%s/json' % (hostname, port)
+
+    try:
+        # fetch data
+        log.debug('collect_data: fetching from url: %s, timeout: %d' % (url, timeout))
+        r = requests.get(url=url, timeout=timeout)
+        log.debug('collect_data: %s returned %r' % (hostname, r))
+        if r:
+            # convert to json
+            j = r.json()
+            log.debug('collect_data: json returned from %s is: %r' % (
+                hostname, j))
+            # If proxy, the reading could be old.
+            if proxy:
+                #Check that it's not older than now - arcint
                 time_of_reading = datetime_from_reading(j['DateTime'])
                 age_of_reading = utc_now() - time_of_reading
                 if age_of_reading.seconds > archive_interval:
                     # Nothing current, will have to read directly for PurpleAir device.
-                    log.info('Ignoring old purple-proxy reading--age: %d seconds.' % age_of_reading.seconds)
+                    log.info('Ignoring proxy reading--age: %d seconds.'
+                             % age_of_reading.seconds)
                     j = None
-        except Exception as e:
-            log.info('collect_data: Attempt to fetch from: %s failed: %s.' % (purple_proxy_hostname, e))
-            j = None
+    except Exception as e:
+        log.info('collect_data: Attempt to fetch from: %s failed: %s.' % (hostname, e))
+        j = None
 
 
     if j is None:
-        if purple_proxy_hostname is not None:
-            # Mention in the log that we're querying the PurpleAir device directly.
-            log.info("Didn't get reading from %s (see reason above)."
-                "  Will query sensor directly." % purple_proxy_hostname)
-        # fetch data
-        r = requests.get(url="http://%s:%s/json" % (hostname, port), timeout=timeout)
-        if not r:
-            return None
-        # convert to json
-        j = r.json()
+        return None
 
     # create a record
+    log.debug('Successful read from %s.' % hostname)
     return populate_record(now_ts, j)
 
 def populate_record(ts, j):
@@ -307,22 +336,19 @@ class Purple(StdService):
             config_dict['DataBindings'],
             config_dict['Databases'],
             self.data_binding)
-        try:
-            self.config_dict['hostname']
-        except KeyError as e:
-            raise Exception("Data will not be posted: Missing option %s" % e)
-        self.config_dict.setdefault('port', 80) # default port is HTTP
-        self.config_dict.setdefault('timeout', 10) # url fetch timeout
 
-        self.config_dict.setdefault('purple_proxy_hostname', None)
-        self.config_dict.setdefault('purple_proxy_port', 8000)
-        self.config_dict.setdefault('purple_proxy_timeout', 5)
+        (self.primary_sensor, self.secondary_sensor, self.primary_proxy,
+            self.secondary_proxy)  = Purple.configure_sources(self.config_dict)
 
         self.bind(weewx.STARTUP, self._catchup)
         self.bind(weewx.END_ARCHIVE_PERIOD, self.end_archive_period)
 
-    def shutDown(self):
-        pass
+    def configure_sources(config_dict):
+        primary_sensor = Source(config_dict, 'PrimarySensor', False)
+        secondary_sensor = Source(config_dict, 'SecondarySensor', False)
+        primary_proxy = Source(config_dict, 'PrimaryProxy', True)
+        secondary_proxy = Source(config_dict, 'SecondaryProxy', True)
+        return primary_sensor, secondary_sensor, primary_proxy, secondary_proxy
 
     def _catchup(self, _event):
         """Pull any unarchived records off the purple-proxy service and archive them.
@@ -349,7 +375,7 @@ class Purple(StdService):
         # Find out when the database was last updated.
         lastgood_ts = dbmanager.lastGoodStamp()
         if lastgood_ts == None:
-            log.info('New purple database.  Will add all records stored in purple-proxy service (if installed).')
+            log.info('New purple database.  Will add all records stored in purple-proxy service (if running).')
             lastgood_ts = 0
 
         try:
@@ -389,17 +415,58 @@ class Purple(StdService):
         dbmanager.addRecord(record)
 
     def get_data(self, now_ts):
-        record = collect_data(self.config_dict['hostname'],
-                              weeutil.weeutil.to_int(self.config_dict['port']),
-                              weeutil.weeutil.to_int(self.config_dict['timeout']),
-                              self.archive_interval, now_ts,
-                              self.config_dict['purple_proxy_hostname'],
-                              weeutil.weeutil.to_int(self.config_dict['purple_proxy_port']),
-                              weeutil.weeutil.to_int(self.config_dict['purple_proxy_timeout']))
+        record = None
+        if self.primary_proxy.enable:
+            record = collect_data(self.primary_proxy.hostname,
+                                  self.primary_proxy.port,
+                                  self.primary_proxy.timeout,
+                                  self.archive_interval,
+                                  now_ts,
+                                  True)
+        if record is None:
+            if self.secondary_proxy.enable:
+                record = collect_data(self.secondary_proxy.hostname,
+                                      self.secondary_proxy.port,
+                                      self.secondary_proxy.timeout,
+                                      self.archive_interval,
+                                      now_ts,
+                                      True)
+        if record is None:
+            if self.primary_sensor.enable:
+                record = collect_data(self.primary_sensor.hostname,
+                                      self.primary_sensor.port,
+                                      self.primary_sensor.timeout,
+                                      self.archive_interval,
+                                      now_ts,
+                                      False)
+        if record is None:
+            if self.secondary_sensor.enable:
+                record = collect_data(self.secondary_sensor.hostname,
+                                      self.secondary_sensor.port,
+                                      self.secondary_sensor.timeout,
+                                      self.archive_interval,
+                                      now_ts,
+                                      False)
         if record is None:
             return None
+
         record['interval'] = self.archive_interval / 60
         return record
+
+    def get_proxy_version(hostname, port, timeout):
+        try:
+            url = 'http://%s:%s/get-version' % (hostname, port)
+            r = requests.get(url=url, timeout=timeout)
+            log.debug('get-proxy-version: r: %s' % r)
+            if r is None:
+                log.debug('get-proxy-version: request returned None')
+                return Non
+            j = r.json()
+            log.debug('get_proxy_version: returning version %s for %s.' % (j['version'], hostname))
+            return j['version']
+        except Exception as e:
+            log.debug('Could not get version from proxy %s: %s.  Down?' % (hostname, e))
+            return None
 
     def genStartupRecords(self, since_ts):
         """Return archive records since_ts.
@@ -408,45 +475,60 @@ class Purple(StdService):
         log.info('Downloading new records (if any).')
         new_records = 0
 
-        purple_proxy_hostname = self.config_dict['purple_proxy_hostname']
-        purple_proxy_port = weeutil.weeutil.to_int(self.config_dict['purple_proxy_port'])
-        purple_proxy_timeout = weeutil.weeutil.to_int(self.config_dict['purple_proxy_timeout'])
+        hostname = None
+        proxy = None
+        timeout = None
 
-        j = None
-        try:
-            if purple_proxy_hostname is not None:
-                url = 'http://%s:%s/fetch-archive-records?since_ts=%d' % (
-                    purple_proxy_hostname, purple_proxy_port, since_ts)
-                log.debug('genStartupRecords: url: %s' % url)
-                r = requests.get(url=url, timeout=purple_proxy_timeout)
-                log.debug('genStartupRecords: %s returned %r' % (url, r))
-                if r:
-                    # convert to json
-                    j = r.json()
-                    log.debug('genStartupRecords: ...the json is: %r' % j)
-                    for reading in j:
-                        # Get time_of_reading
-                        time_of_reading = datetime_from_reading(reading['DateTime'])
-                        log.debug('genStartupRecords: examining reading: %s (%s).' % (reading['DateTime'], time_of_reading))
-                        reading_ts = calendar.timegm(time_of_reading.utctimetuple())
-                        log.debug('genStartupRecords: reading_ts: %s.' % timestamp_to_string(reading_ts))
-                        reading_ts = int(reading_ts / 60) * 60 # zero out the seconds
-                        log.debug('genStartupRecords: rounded reading_ts: %s.' % timestamp_to_string(reading_ts))
-                        if reading_ts > since_ts:
-                            # create a record
-                            pkt = populate_record(reading_ts, reading)
-                            pkt['interval'] = self.archive_interval / 60
-                            log.debug('genStartupRecords: pkt(%s): %r.' % (timestamp_to_string(pkt['dateTime']), pkt))
-                            log.debug('packet: %s' % pkt)
-                            log.debug('genStartupRecords: added record: %s' % time_of_reading)
-                            new_records += 1
-                            yield pkt
-            log.info('Downloaded %d new records.' % new_records)
+        if self.primary_proxy.enable:
+            version= Purple.get_proxy_version(self.primary_proxy.hostname,
+                self.primary_proxy.port, self.primary_proxy.timeout)
+            if version is not None:
+                hostname = self.primary_proxy.hostname
+                port     = self.primary_proxy.port
+                timeout  = self.primary_proxy.timeout
+            elif self.secondary_proxy.enable:
+                version= Purple.get_proxy_version(self.secondary_proxy.hostname,
+                    self.secondary_proxy.port, self.secondary_proxy.timeout)
+                if version is not None:
+                    hostname = self.secondary_proxy.hostname
+                    port     = self.secondary_proxy.port
+                    timeout  = self.secondary_proxy.timeout
+
+        if hostname is None:
+            log.info('No proxy from which to fetch PurpleAir records.')
             return
+
+        try:
+            url = 'http://%s:%s/fetch-archive-records?since_ts=%d' % (
+                hostname, port, since_ts)
+            log.debug('genStartupRecords: url: %s' % url)
+            r = requests.get(url=url, timeout=timeout)
+            log.debug('genStartupRecords: %s returned %r' % (url, r))
+            if r:
+                # convert to json
+                j = r.json()
+                log.debug('genStartupRecords: ...the json is: %r' % j)
+                for reading in j:
+                    # Get time_of_reading
+                    time_of_reading = datetime_from_reading(reading['DateTime'])
+                    log.debug('genStartupRecords: examining reading: %s (%s).' % (reading['DateTime'], time_of_reading))
+                    reading_ts = calendar.timegm(time_of_reading.utctimetuple())
+                    log.debug('genStartupRecords: reading_ts: %s.' % timestamp_to_string(reading_ts))
+                    reading_ts = int(reading_ts / 60) * 60 # zero out the seconds
+                    log.debug('genStartupRecords: rounded reading_ts: %s.' % timestamp_to_string(reading_ts))
+                    if reading_ts > since_ts:
+                        # create a record
+                        pkt = populate_record(reading_ts, reading)
+                        pkt['interval'] = self.archive_interval / 60
+                        log.debug('genStartupRecords: pkt(%s): %r.' % (timestamp_to_string(pkt['dateTime']), pkt))
+                        log.debug('packet: %s' % pkt)
+                        log.debug('genStartupRecords: added record: %s' % time_of_reading)
+                        new_records += 1
+                        yield pkt
+            log.info('Downloaded %d new records.' % new_records)
         except Exception as e:
-            log.info('gen_startup_records: Attempt to fetch from: %s failed.: %s' % (purple_proxy_hostname, e))
-            weeutil.logger.log_traceback(log.critical, "    ****  ")
-            j = None
+            log.info('gen_startup_records: Attempt to fetch from: %s failed.: %s' % (hostname, e))
+            weeutil.logger.log_traceback(log.error, "    ****  ")
 
 if __name__ == "__main__":
     usage = """%prog [options] [--help] [--debug]"""
