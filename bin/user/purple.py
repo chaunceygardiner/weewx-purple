@@ -108,7 +108,7 @@ class Source:
         self.is_proxy = is_proxy
         try:
             source_dict = config_dict.get(name, {})
-            self.enable = to_bool(source_dict.get('enable')),
+            self.enable = to_bool(source_dict.get('enable', False))
             self.hostname = source_dict['hostname']
             if is_proxy:
                 self.port = to_int(source_dict.get('port', 8000))
@@ -340,14 +340,36 @@ class Purple(StdService):
         (self.primary_sensor, self.secondary_sensor, self.primary_proxy,
             self.secondary_proxy)  = Purple.configure_sources(self.config_dict)
 
-        self.bind(weewx.STARTUP, self._catchup)
-        self.bind(weewx.END_ARCHIVE_PERIOD, self.end_archive_period)
+        source_count = 0
+        if self.primary_proxy.enable: 
+            source_count += 1
+            log.info('Source %d for PurpleAir readings: %s:%s, timeout: %d' % (
+                source_count, self.primary_proxy.hostname, self.primary_proxy.port, self.primary_proxy.timeout))
+        if self.secondary_proxy.enable: 
+            source_count += 1
+            log.info('Source %d for PurpleAir readings: %s:%s, timeout: %d' % (
+                source_count, self.secondary_proxy.hostname, self.secondary_proxy.port, self.secondary_proxy.timeout))
+        if self.primary_sensor.enable: 
+            source_count += 1
+            log.info('Source %d for PurpleAir readings: %s:%s, timeout: %d' % (
+                source_count, self.primary_sensor.hostname, self.primary_sensor.port, self.primary_sensor.timeout))
+        if self.secondary_sensor.enable: 
+            source_count += 1
+            log.info('Source %d for PurpleAir readings: %s:%s, timeout: %d' % (
+                source_count, self.secondary_sensor.hostname, self.secondary_sensor.port, self.secondary_sensor.timeout))
+
+        if source_count == 0:
+            log.error('No sources configured for purple extension.  Purple extension is inoperable.')
+        else:
+            self.bind(weewx.STARTUP, self._catchup)
+            self.bind(weewx.END_ARCHIVE_PERIOD, self.end_archive_period)
 
     def configure_sources(config_dict):
         primary_sensor = Source(config_dict, 'PrimarySensor', False)
         secondary_sensor = Source(config_dict, 'SecondarySensor', False)
         primary_proxy = Source(config_dict, 'PrimaryProxy', True)
         secondary_proxy = Source(config_dict, 'SecondaryProxy', True)
+
         return primary_sensor, secondary_sensor, primary_proxy, secondary_proxy
 
     def _catchup(self, _event):
