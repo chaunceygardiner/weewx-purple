@@ -34,7 +34,7 @@ See `weewx-purple` and `purple-proxy` in action on the following pages:
       Adjust the command as necessary.
 
 1. Edit the `Purple` section of weewx.conf (which was created by the install
-   above).  Up to two PurpleAir sensors can be configured, as well as up to two
+   above).  Up to two PurpleAir sensors can be configured, as well as up to four
    purple proxies.  Note: the order in which sensors/proxies are interrogated
    is: `PrimaryProxy`, `SecondaryProxy`, `PrimarySensor`, `SecondarySensor`.
    The first sensor/proxy that answers is the one used to answer the WeeWX
@@ -61,6 +61,16 @@ See `weewx-purple` and `purple-proxy` in action on the following pages:
        [[SecondaryProxy]]
            enable = false
            hostname = proxy2
+           port = 8000
+           timeout = 5
+       [[TertiaryProxy]]
+           enable = false
+           hostname = proxy3
+           port = 8000
+           timeout = 5
+       [[QuaternaryProxy]]
+           enable = false
+           hostname = proxy4
            port = 8000
            timeout = 5
    ```

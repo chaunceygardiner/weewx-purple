@@ -43,15 +43,27 @@ class PurpleInstaller(ExtensionInstaller):
                         'port'       : '80',
                         'timeout'    : '15',
                     },
-                    'PrimaryProxy'  : {
+                    'PrimaryProxy'   : {
                         'enable'     : False,
                         'hostname'   : 'proxy',
                         'port'       : '8000',
                         'timeout'    : '5',
                     },
-                    'SecondaryProxy'  : {
+                    'SecondaryProxy' : {
                         'enable'     : False,
                         'hostname'   : 'proxy2',
+                        'port'       : '8000',
+                        'timeout'    : '5',
+                    },
+                    'TertiaryProxy'  : {
+                        'enable'     : False,
+                        'hostname'   : 'proxy3',
+                        'port'       : '8000',
+                        'timeout'    : '5',
+                    },
+                    'QuaternaryProxy': {
+                        'enable'     : False,
+                        'hostname'   : 'proxy4',
                         'port'       : '8000',
                         'timeout'    : '5',
                     },

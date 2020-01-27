@@ -56,6 +56,16 @@ Installation instructions.
            hostname = proxy2
            port = 8000
            timeout = 5
+       [[TertiaryProxy]]
+           enable = false
+           hostname = proxy3
+           port = 8000
+           timeout = 5
+       [[QuaternaryProxy]]
+           enable = false
+           hostname = proxy4
+           port = 8000
+           timeout = 5
 
    [DataBindings]
        [[purple_binding]]
@@ -338,7 +348,8 @@ class Purple(StdService):
             self.data_binding)
 
         (self.primary_sensor, self.secondary_sensor, self.primary_proxy,
-            self.secondary_proxy)  = Purple.configure_sources(self.config_dict)
+         self.secondary_proxy, self.tertiary_proxy, self.quaternary_proxy
+         )  = Purple.configure_sources(self.config_dict)
 
         source_count = 0
         if self.primary_proxy.enable: 
@@ -349,6 +360,14 @@ class Purple(StdService):
             source_count += 1
             log.info('Source %d for PurpleAir readings: %s:%s, timeout: %d' % (
                 source_count, self.secondary_proxy.hostname, self.secondary_proxy.port, self.secondary_proxy.timeout))
+        if self.tertiary_proxy.enable: 
+            source_count += 1
+            log.info('Source %d for PurpleAir readings: %s:%s, timeout: %d' % (
+                source_count, self.tertiary_proxy.hostname, self.tertiary_proxy.port, self.tertiary_proxy.timeout))
+        if self.quaternary_proxy.enable: 
+            source_count += 1
+            log.info('Source %d for PurpleAir readings: %s:%s, timeout: %d' % (
+                source_count, self.quaternary_proxy.hostname, self.quaternary_proxy.port, self.quaternary_proxy.timeout))
         if self.primary_sensor.enable: 
             source_count += 1
             log.info('Source %d for PurpleAir readings: %s:%s, timeout: %d' % (
@@ -369,8 +388,10 @@ class Purple(StdService):
         secondary_sensor = Source(config_dict, 'SecondarySensor', False)
         primary_proxy = Source(config_dict, 'PrimaryProxy', True)
         secondary_proxy = Source(config_dict, 'SecondaryProxy', True)
+        tertiary_proxy = Source(config_dict, 'TertiaryProxy', True)
+        quaternary_proxy = Source(config_dict, 'QuaternaryProxy', True)
 
-        return primary_sensor, secondary_sensor, primary_proxy, secondary_proxy
+        return primary_sensor, secondary_sensor, primary_proxy, secondary_proxy, tertiary_proxy, quaternary_proxy
 
     def _catchup(self, _event):
         """Pull any unarchived records off the purple-proxy service and archive them.
@@ -450,6 +471,22 @@ class Purple(StdService):
                 record = collect_data(self.secondary_proxy.hostname,
                                       self.secondary_proxy.port,
                                       self.secondary_proxy.timeout,
+                                      self.archive_interval,
+                                      now_ts,
+                                      True)
+        if record is None:
+            if self.tertiary_proxy.enable:
+                record = collect_data(self.tertiary_proxy.hostname,
+                                      self.tertiary_proxy.port,
+                                      self.tertiary_proxy.timeout,
+                                      self.archive_interval,
+                                      now_ts,
+                                      True)
+        if record is None:
+            if self.quaternary_proxy.enable:
+                record = collect_data(self.quaternary_proxy.hostname,
+                                      self.quaternary_proxy.port,
+                                      self.quaternary_proxy.timeout,
                                       self.archive_interval,
                                       now_ts,
                                       True)
