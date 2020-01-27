@@ -90,6 +90,7 @@ import json
 import logging
 import os
 import requests
+import sys
 import time
 
 from dateutil import tz
@@ -108,6 +109,10 @@ from six.moves import range
 log = logging.getLogger(__name__)
 
 WEEWX_PURPLE_VERSION = "1.0"
+
+if sys.version_info[0] < 3:
+    raise weewx.UnsupportedFeature(
+        "weewx-purple requires Python 3, found %s" % sys.version_info[0])
 
 if weewx.__version__ < "4":
     raise weewx.UnsupportedFeature(

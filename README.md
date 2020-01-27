@@ -8,6 +8,8 @@ A WeeWX plugin that gets its PurpleAir sensor readings from the
 
 Copyright (C)2020 by John A Kline (john@johnkline.com)
 
+**THIS PLUGIN REQUIRES PYTHON 3 AND WEEWX 4**
+
 ### Why?  What does it do?
 
 It is advantageous to query `purlpe-proxy` for readings.  `purple-proxy`
