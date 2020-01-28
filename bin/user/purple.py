@@ -36,32 +36,32 @@ Installation instructions.
 
    [Purple]
        data_binding = purple_binding
-       [[PrimarySensor]]
+       [[Sensor1]]
            enable = true
            hostname = purple-air
            port = 80
            timeout = 15
-       [[SecondarySensor]]
+       [[Sensor2]]
            enable = false
            hostname = purple-air2
            port = 80
            timeout = 15
-       [[PrimaryProxy]]
+       [[Proxy1]]
            enable = false
-           hostname = proxy
+           hostname = proxy1
            port = 8000
            timeout = 5
-       [[SecondaryProxy]]
+       [[Proxy2]]
            enable = false
            hostname = proxy2
            port = 8000
            timeout = 5
-       [[TertiaryProxy]]
+       [[Proxy3]]
            enable = false
            hostname = proxy3
            port = 8000
            timeout = 5
-       [[QuaternaryProxy]]
+       [[Proxy4]]
            enable = false
            hostname = proxy4
            port = 8000
@@ -121,20 +121,15 @@ if weewx.__version__ < "4":
 class Source:
     def __init__(self, config_dict, name, is_proxy):
         self.is_proxy = is_proxy
-        try:
-            source_dict = config_dict.get(name, {})
-            self.enable = to_bool(source_dict.get('enable', False))
-            self.hostname = source_dict['hostname']
-            if is_proxy:
-                self.port = to_int(source_dict.get('port', 8000))
-            else:
-                self.port = to_int(source_dict.get('port', 80))
-            self.timeout  = to_int(source_dict.get('timeout', 10))
-        except KeyError as e:
-            self.enable = False
-            self.hostname = None
-            self.port = None
-            self.timeout = None
+        # Raise KeyEror if name not in dictionary.
+        source_dict = config_dict[name]
+        self.enable = to_bool(source_dict.get('enable', False))
+        self.hostname = source_dict.get('hostname', '')
+        if is_proxy:
+            self.port = to_int(source_dict.get('port', 8000))
+        else:
+            self.port = to_int(source_dict.get('port', 80))
+        self.timeout  = to_int(source_dict.get('timeout', 10))
 
 # set up appropriate units
 weewx.units.USUnits['group_concentration'] = 'microgram_per_meter_cubed'
@@ -352,36 +347,17 @@ class Purple(StdService):
             config_dict['Databases'],
             self.data_binding)
 
-        (self.primary_sensor, self.secondary_sensor, self.primary_proxy,
-         self.secondary_proxy, self.tertiary_proxy, self.quaternary_proxy
-         )  = Purple.configure_sources(self.config_dict)
+        # Returns proxies followed by sensors.
+        self.sources = Purple.configure_sources(self.config_dict)
 
         source_count = 0
-        if self.primary_proxy.enable: 
-            source_count += 1
-            log.info('Source %d for PurpleAir readings: %s:%s, timeout: %d' % (
-                source_count, self.primary_proxy.hostname, self.primary_proxy.port, self.primary_proxy.timeout))
-        if self.secondary_proxy.enable: 
-            source_count += 1
-            log.info('Source %d for PurpleAir readings: %s:%s, timeout: %d' % (
-                source_count, self.secondary_proxy.hostname, self.secondary_proxy.port, self.secondary_proxy.timeout))
-        if self.tertiary_proxy.enable: 
-            source_count += 1
-            log.info('Source %d for PurpleAir readings: %s:%s, timeout: %d' % (
-                source_count, self.tertiary_proxy.hostname, self.tertiary_proxy.port, self.tertiary_proxy.timeout))
-        if self.quaternary_proxy.enable: 
-            source_count += 1
-            log.info('Source %d for PurpleAir readings: %s:%s, timeout: %d' % (
-                source_count, self.quaternary_proxy.hostname, self.quaternary_proxy.port, self.quaternary_proxy.timeout))
-        if self.primary_sensor.enable: 
-            source_count += 1
-            log.info('Source %d for PurpleAir readings: %s:%s, timeout: %d' % (
-                source_count, self.primary_sensor.hostname, self.primary_sensor.port, self.primary_sensor.timeout))
-        if self.secondary_sensor.enable: 
-            source_count += 1
-            log.info('Source %d for PurpleAir readings: %s:%s, timeout: %d' % (
-                source_count, self.secondary_sensor.hostname, self.secondary_sensor.port, self.secondary_sensor.timeout))
-
+        for source in self.sources:
+            if source.enable: 
+                source_count += 1
+                log.info(
+                    'Source %d for PurpleAir readings: %s %s:%s, timeout: %d' % (
+                    source_count, 'purple-proxy' if source.is_proxy else 'sensor',
+                    source.hostname, source.port, source.timeout))
         if source_count == 0:
             log.error('No sources configured for purple extension.  Purple extension is inoperable.')
         else:
@@ -389,14 +365,27 @@ class Purple(StdService):
             self.bind(weewx.END_ARCHIVE_PERIOD, self.end_archive_period)
 
     def configure_sources(config_dict):
-        primary_sensor = Source(config_dict, 'PrimarySensor', False)
-        secondary_sensor = Source(config_dict, 'SecondarySensor', False)
-        primary_proxy = Source(config_dict, 'PrimaryProxy', True)
-        secondary_proxy = Source(config_dict, 'SecondaryProxy', True)
-        tertiary_proxy = Source(config_dict, 'TertiaryProxy', True)
-        quaternary_proxy = Source(config_dict, 'QuaternaryProxy', True)
+        sources = []
+        # Configure Proxies
+        idx = 0
+        while True:
+            idx += 1
+            try:
+                source = Source(config_dict, 'Proxy%d' % idx, True)
+                sources.append(source)
+            except KeyError:
+                break
+        # Configure Sensors
+        idx = 0
+        while True:
+            idx += 1
+            try:
+                source = Source(config_dict, 'Sensor%d' % idx, False)
+                sources.append(source)
+            except KeyError:
+                break
 
-        return primary_sensor, secondary_sensor, primary_proxy, secondary_proxy, tertiary_proxy, quaternary_proxy
+        return sources
 
     def _catchup(self, _event):
         """Pull any unarchived records off the purple-proxy service and archive them.
@@ -463,54 +452,17 @@ class Purple(StdService):
         dbmanager.addRecord(record)
 
     def get_data(self, now_ts):
-        record = None
-        if self.primary_proxy.enable:
-            record = collect_data(self.primary_proxy.hostname,
-                                  self.primary_proxy.port,
-                                  self.primary_proxy.timeout,
-                                  self.archive_interval,
-                                  now_ts,
-                                  True)
-        if record is None:
-            if self.secondary_proxy.enable:
-                record = collect_data(self.secondary_proxy.hostname,
-                                      self.secondary_proxy.port,
-                                      self.secondary_proxy.timeout,
+        for source in self.sources:
+            if source.enable:
+                record = collect_data(source.hostname,
+                                      source.port,
+                                      source.timeout,
                                       self.archive_interval,
                                       now_ts,
-                                      True)
-        if record is None:
-            if self.tertiary_proxy.enable:
-                record = collect_data(self.tertiary_proxy.hostname,
-                                      self.tertiary_proxy.port,
-                                      self.tertiary_proxy.timeout,
-                                      self.archive_interval,
-                                      now_ts,
-                                      True)
-        if record is None:
-            if self.quaternary_proxy.enable:
-                record = collect_data(self.quaternary_proxy.hostname,
-                                      self.quaternary_proxy.port,
-                                      self.quaternary_proxy.timeout,
-                                      self.archive_interval,
-                                      now_ts,
-                                      True)
-        if record is None:
-            if self.primary_sensor.enable:
-                record = collect_data(self.primary_sensor.hostname,
-                                      self.primary_sensor.port,
-                                      self.primary_sensor.timeout,
-                                      self.archive_interval,
-                                      now_ts,
-                                      False)
-        if record is None:
-            if self.secondary_sensor.enable:
-                record = collect_data(self.secondary_sensor.hostname,
-                                      self.secondary_sensor.port,
-                                      self.secondary_sensor.timeout,
-                                      self.archive_interval,
-                                      now_ts,
-                                      False)
+                                      source.is_proxy)
+                if record is not None:
+                    break
+
         if record is None:
             return None
 
@@ -533,7 +485,7 @@ class Purple(StdService):
             return None
 
     def genStartupRecords(self, since_ts):
-        """Return archive records since_ts.
+        """Return arehive records since_ts.
         """
         log.debug('genStartupRecords: since_ts=%r' % since_ts)
         log.info('Downloading new records (if any).')
@@ -543,20 +495,16 @@ class Purple(StdService):
         proxy = None
         timeout = None
 
-        if self.primary_proxy.enable:
-            version= Purple.get_proxy_version(self.primary_proxy.hostname,
-                self.primary_proxy.port, self.primary_proxy.timeout)
-            if version is not None:
-                hostname = self.primary_proxy.hostname
-                port     = self.primary_proxy.port
-                timeout  = self.primary_proxy.timeout
-            elif self.secondary_proxy.enable:
-                version= Purple.get_proxy_version(self.secondary_proxy.hostname,
-                    self.secondary_proxy.port, self.secondary_proxy.timeout)
-                if version is not None:
-                    hostname = self.secondary_proxy.hostname
-                    port     = self.secondary_proxy.port
-                    timeout  = self.secondary_proxy.timeout
+        for source in self.sources:
+            if source.is_proxy:
+                if source.enable:
+                    version= Purple.get_proxy_version(source.hostname,
+                        source.port, source.timeout)
+                    if version is not None:
+                        hostname = source.hostname
+                        port     = source.port
+                        timeout  = source.timeout
+                        break
 
         if hostname is None:
             log.info('No proxy from which to fetch PurpleAir records.')

@@ -31,41 +31,41 @@ class PurpleInstaller(ExtensionInstaller):
             config={
                 'Purple': {
                     'data_binding'   : 'purple_binding',
-                    'PrimarySensor'  : {
-                        'enable'     : True,
-                        'hostname'   : 'purple-air',
-                        'port'       : '80',
-                        'timeout'    : '15',
-                    },
-                    'SecondarySensor': {
+                    'Proxy1'   : {
                         'enable'     : False,
-                        'hostname'   : 'purple-air2',
-                        'port'       : '80',
-                        'timeout'    : '15',
-                    },
-                    'PrimaryProxy'   : {
-                        'enable'     : False,
-                        'hostname'   : 'proxy',
+                        'hostname'   : 'proxy1',
                         'port'       : '8000',
                         'timeout'    : '5',
                     },
-                    'SecondaryProxy' : {
+                    'Proxy2' : {
                         'enable'     : False,
                         'hostname'   : 'proxy2',
                         'port'       : '8000',
                         'timeout'    : '5',
                     },
-                    'TertiaryProxy'  : {
+                    'Proxy3'  : {
                         'enable'     : False,
                         'hostname'   : 'proxy3',
                         'port'       : '8000',
                         'timeout'    : '5',
                     },
-                    'QuaternaryProxy': {
+                    'Proxy4': {
                         'enable'     : False,
                         'hostname'   : 'proxy4',
                         'port'       : '8000',
                         'timeout'    : '5',
+                    },
+                    'Sensor1'  : {
+                        'enable'     : True,
+                        'hostname'   : 'purple-air',
+                        'port'       : '80',
+                        'timeout'    : '15',
+                    },
+                    'Sensor2': {
+                        'enable'     : False,
+                        'hostname'   : 'purple-air2',
+                        'port'       : '80',
+                        'timeout'    : '15',
                     },
                 },
                 'DataBindings': {
