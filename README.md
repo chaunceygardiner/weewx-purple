@@ -62,21 +62,25 @@ See `weewx-purple` and `purple-proxy` in action on the following pages:
            hostname = proxy
            port = 8000
            timeout = 5
+           starup_timeout = 60
        [[Proxy2]]
            enable = false
            hostname = proxy2
            port = 8000
            timeout = 5
+           starup_timeout = 60
        [[Proxy3]]
            enable = false
            hostname = proxy3
            port = 8000
            timeout = 5
+           starup_timeout = 60
        [[Proxy4]]
            enable = false
            hostname = proxy4
            port = 8000
            timeout = 5
+           starup_timeout = 60
    ```
 
 1. To get average readings over the archive period and to not miss archive

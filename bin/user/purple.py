@@ -130,6 +130,8 @@ class Source:
         else:
             self.port = to_int(source_dict.get('port', 80))
         self.timeout  = to_int(source_dict.get('timeout', 10))
+        # Startup timeout is only used by proxies.
+        self.startup_timeout = to_int(source_dict.get('startup_timeout', 60))
 
 # set up appropriate units
 weewx.units.USUnits['group_concentration'] = 'microgram_per_meter_cubed'
@@ -503,44 +505,43 @@ class Purple(StdService):
                     if version is not None:
                         hostname = source.hostname
                         port     = source.port
-                        timeout  = source.timeout
-                        break
+                        timeout  = source.startup_timeout
+                        try:
+                            url = 'http://%s:%s/fetch-archive-records?since_ts=%d' % (
+                                hostname, port, since_ts)
+                            log.info('genStartupRecords: url: %s' % url)
+                            r = requests.get(url=url, timeout=timeout)
+                            log.debug('genStartupRecords: %s returned %r' % (url, r))
+                            if r:
+                                # convert to json
+                                j = r.json()
+                                log.debug('genStartupRecords: ...the json is: %r' % j)
+                                for reading in j:
+                                    # Get time_of_reading
+                                    time_of_reading = datetime_from_reading(reading['DateTime'])
+                                    log.debug('genStartupRecords: examining reading: %s (%s).' % (reading['DateTime'], time_of_reading))
+                                    reading_ts = calendar.timegm(time_of_reading.utctimetuple())
+                                    log.debug('genStartupRecords: reading_ts: %s.' % timestamp_to_string(reading_ts))
+                                    reading_ts = int(reading_ts / 60) * 60 # zero out the seconds
+                                    log.debug('genStartupRecords: rounded reading_ts: %s.' % timestamp_to_string(reading_ts))
+                                    if reading_ts > since_ts:
+                                        # create a record
+                                        pkt = populate_record(reading_ts, reading)
+                                        pkt['interval'] = self.archive_interval / 60
+                                        log.debug('genStartupRecords: pkt(%s): %r.' % (timestamp_to_string(pkt['dateTime']), pkt))
+                                        log.debug('packet: %s' % pkt)
+                                        log.debug('genStartupRecords: added record: %s' % time_of_reading)
+                                        new_records += 1
+                                        yield pkt
+                            log.info('Downloaded %d new records.' % new_records)
+                            return
+                        except Exception as e:
+                            log.info('gen_startup_records: Attempt to fetch from: %s failed.: %s' % (hostname, e))
+                            weeutil.logger.log_traceback(log.error, "    ****  ")
 
-        if hostname is None:
-            log.info('No proxy from which to fetch PurpleAir records.')
-            return
+        log.info('No proxy from which to fetch PurpleAir records.')
+        return
 
-        try:
-            url = 'http://%s:%s/fetch-archive-records?since_ts=%d' % (
-                hostname, port, since_ts)
-            log.debug('genStartupRecords: url: %s' % url)
-            r = requests.get(url=url, timeout=timeout)
-            log.debug('genStartupRecords: %s returned %r' % (url, r))
-            if r:
-                # convert to json
-                j = r.json()
-                log.debug('genStartupRecords: ...the json is: %r' % j)
-                for reading in j:
-                    # Get time_of_reading
-                    time_of_reading = datetime_from_reading(reading['DateTime'])
-                    log.debug('genStartupRecords: examining reading: %s (%s).' % (reading['DateTime'], time_of_reading))
-                    reading_ts = calendar.timegm(time_of_reading.utctimetuple())
-                    log.debug('genStartupRecords: reading_ts: %s.' % timestamp_to_string(reading_ts))
-                    reading_ts = int(reading_ts / 60) * 60 # zero out the seconds
-                    log.debug('genStartupRecords: rounded reading_ts: %s.' % timestamp_to_string(reading_ts))
-                    if reading_ts > since_ts:
-                        # create a record
-                        pkt = populate_record(reading_ts, reading)
-                        pkt['interval'] = self.archive_interval / 60
-                        log.debug('genStartupRecords: pkt(%s): %r.' % (timestamp_to_string(pkt['dateTime']), pkt))
-                        log.debug('packet: %s' % pkt)
-                        log.debug('genStartupRecords: added record: %s' % time_of_reading)
-                        new_records += 1
-                        yield pkt
-            log.info('Downloaded %d new records.' % new_records)
-        except Exception as e:
-            log.info('gen_startup_records: Attempt to fetch from: %s failed.: %s' % (hostname, e))
-            weeutil.logger.log_traceback(log.error, "    ****  ")
 
 if __name__ == "__main__":
     usage = """%prog [options] [--help] [--debug]"""
