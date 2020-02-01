@@ -419,10 +419,9 @@ class Purple(StdService):
             # Now ask for any new records since then.  Reject any records that
             # have a timestamp in the future, but provide some lenience for
             # clock drift.
-            now = time.time()
             for record in self.genStartupRecords(lastgood_ts):
                 ts = record.get('dateTime')
-                if ts and ts < now + self.archive_delay:
+                if ts and ts < time.time() + self.archive_delay:
                     log.debug('__init__: saving record(%s): %r.' % (timestamp_to_string(record['dateTime']), record))
                     self.save_data(record)
                 else:
