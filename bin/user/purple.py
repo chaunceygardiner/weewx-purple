@@ -130,8 +130,6 @@ class Source:
         else:
             self.port = to_int(source_dict.get('port', 80))
         self.timeout  = to_int(source_dict.get('timeout', 10))
-        # Startup timeout is only used by proxies.
-        self.startup_timeout = to_int(source_dict.get('startup_timeout', 60))
 
 # set up appropriate units
 weewx.units.USUnits['group_concentration'] = 'microgram_per_meter_cubed'
@@ -434,7 +432,7 @@ class Purple(StdService):
             weeutil.logger.log_traceback(log.critical, "    ****  ")
 
     def end_archive_period(self, _event):
-        """ceate a new archive record and save it to the database"""
+        """create a new archive record and save it to the database"""
         try:
             now = int(time.time() + 0.5)
             data = self.get_data(now)
@@ -486,6 +484,21 @@ class Purple(StdService):
             log.debug('Could not get version from proxy %s: %s.  Down?' % (hostname, e))
             return None
 
+    def get_earliest_timestamp(hostname, port, timeout):
+        try:
+            url = 'http://%s:%s/get-earliest-timestamp' % (hostname, port)
+            r = requests.get(url=url, timeout=timeout)
+            log.debug('get-earliest-timestamp: r: %s' % r)
+            if r is None:
+                log.debug('get-earliest-timestamp: request returned None')
+                return Non
+            j = r.json()
+            log.debug('get_earliest_timestamp: returning earliest timestamp %s for %s.' % (j['timestamp'], hostname))
+            return j['timestamp']
+        except Exception as e:
+            log.debug('Could not get earliest timestamp from proxy %s: %s.  Down?' % (hostname, e))
+            return None
+
     def genStartupRecords(self, since_ts):
         """Return arehive records since_ts.
         """
@@ -497,6 +510,7 @@ class Purple(StdService):
         proxy = None
         timeout = None
 
+        checkpoint_ts = since_ts
         for source in self.sources:
             if source.is_proxy:
                 if source.enable:
@@ -505,34 +519,49 @@ class Purple(StdService):
                     if version is not None:
                         hostname = source.hostname
                         port     = source.port
-                        timeout  = source.startup_timeout
+                        timeout  = source.timeout
                         try:
-                            url = 'http://%s:%s/fetch-archive-records?since_ts=%d' % (
-                                hostname, port, since_ts)
-                            log.info('genStartupRecords: url: %s' % url)
-                            r = requests.get(url=url, timeout=timeout)
-                            log.debug('genStartupRecords: %s returned %r' % (url, r))
-                            if r:
-                                # convert to json
-                                j = r.json()
-                                log.debug('genStartupRecords: ...the json is: %r' % j)
-                                for reading in j:
-                                    # Get time_of_reading
-                                    time_of_reading = datetime_from_reading(reading['DateTime'])
-                                    log.debug('genStartupRecords: examining reading: %s (%s).' % (reading['DateTime'], time_of_reading))
-                                    reading_ts = calendar.timegm(time_of_reading.utctimetuple())
-                                    log.debug('genStartupRecords: reading_ts: %s.' % timestamp_to_string(reading_ts))
-                                    reading_ts = int(reading_ts / 60) * 60 # zero out the seconds
-                                    log.debug('genStartupRecords: rounded reading_ts: %s.' % timestamp_to_string(reading_ts))
-                                    if reading_ts > since_ts:
-                                        # create a record
-                                        pkt = populate_record(reading_ts, reading)
-                                        pkt['interval'] = self.archive_interval / 60
-                                        log.debug('genStartupRecords: pkt(%s): %r.' % (timestamp_to_string(pkt['dateTime']), pkt))
-                                        log.debug('packet: %s' % pkt)
-                                        log.debug('genStartupRecords: added record: %s' % time_of_reading)
-                                        new_records += 1
-                                        yield pkt
+                            fetch_count = None
+                            while True:
+                                # Fetch 300 at a time
+                                # Stop when 0 records returned
+                                if fetch_count is None:
+                                    fetch_count = 0
+                                elif fetch_count == 0:
+                                    log.debug('Done fetching.  Last select fetched: %d records' % fetch_count)
+                                    break
+                                else:
+                                    log.debug('Last select fetched: %d records' % fetch_count)
+                                fetch_count = 0
+                                url = 'http://%s:%s/fetch-archive-records?since_ts=%d,limit=300' % (
+                                    hostname, port, checkpoint_ts)
+                                log.debug('genStartupRecords: url: %s' % url)
+                                r = requests.get(url=url, timeout=timeout)
+                                log.debug('genStartupRecords: %s returned %r' % (url, r))
+                                if r:
+                                    # convert to json
+                                    j = r.json()
+                                    log.debug('genStartupRecords: ...the json is: %r' % j)
+                                    for reading in j:
+                                        fetch_count += 1
+                                        log.debug('reading: %r' % reading)
+                                        # Get time_of_reading
+                                        time_of_reading = datetime_from_reading(reading['DateTime'])
+                                        log.debug('genStartupRecords: examining reading: %s (%s).' % (reading['DateTime'], time_of_reading))
+                                        reading_ts = calendar.timegm(time_of_reading.utctimetuple())
+                                        log.debug('genStartupRecords: reading_ts: %s.' % timestamp_to_string(reading_ts))
+                                        reading_ts = int(reading_ts / 60) * 60 # zero out the seconds
+                                        log.debug('genStartupRecords: rounded reading_ts: %s.' % timestamp_to_string(reading_ts))
+                                        if reading_ts > checkpoint_ts:
+                                            checkpoint_ts = reading_ts
+                                            # create a record
+                                            pkt = populate_record(reading_ts, reading)
+                                            pkt['interval'] = self.archive_interval / 60
+                                            log.debug('genStartupRecords: pkt(%s): %r.' % (timestamp_to_string(pkt['dateTime']), pkt))
+                                            log.debug('packet: %s' % pkt)
+                                            log.debug('genStartupRecords: added record: %s' % time_of_reading)
+                                            new_records += 1
+                                            yield pkt
                             log.info('Downloaded %d new records.' % new_records)
                             return
                         except Exception as e:
