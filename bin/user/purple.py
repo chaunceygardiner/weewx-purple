@@ -153,11 +153,6 @@ class Configuration:
     sources         : List[Source]   # Immutable
 
 # set up appropriate units
-weewx.units.USUnits['group_concentration'] = 'microgram_per_meter_cubed'
-weewx.units.MetricUnits['group_concentration'] = 'microgram_per_meter_cubed'
-weewx.units.MetricWXUnits['group_concentration'] = 'microgram_per_meter_cubed'
-weewx.units.default_unit_format_dict['microgram_per_meter_cubed'] = '%.3f'
-weewx.units.default_unit_label_dict['microgram_per_meter_cubed']  = ' \xc2\xb5g/m\xc2\xb3'
 
 weewx.units.USUnits['air_quality_index'] = 'aqi'
 weewx.units.MetricUnits['air_quality_index'] = 'aqi'
