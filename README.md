@@ -10,6 +10,15 @@ Copyright (C)2020 by John A Kline (john@johnkline.com)
 
 **THIS PLUGIN REQUIRES PYTHON 3 AND WEEWX 4**
 
+**Update** weewx-purple now updates loop records with pm1_0, pm2_5 and
+pm10_0 fields.  These database fields are new in WeeWX 4.  These fields
+correspond to PurpleAir's pm1_0_cf_1, pm2_5_cf_1 and pm10_cf_1 fields.
+If the sensor is an outdoor sensor, the fields inserted are the averages
+of the a and b sensors.  Eventually, an option will be created to allow
+the use of the atm fields (rather than the cf_1 fields).  Likely, an
+option will also be offered to skip creating a separate database since
+the three aforementioned fileds may be enough for many.
+
 ### Why?  What does it do?
 
 It is advantageous to query `purlpe-proxy` for readings.  `purple-proxy`

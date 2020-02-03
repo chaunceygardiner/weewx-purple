@@ -27,7 +27,7 @@ class PurpleInstaller(ExtensionInstaller):
             description='Record air quality via purple-proxy service.',
             author="John A Kline",
             author_email="john@johnkline.com",
-            archive_services='user.purple.Purple',
+            data_services='user.purple.Purple',
             config={
                 'Purple': {
                     'data_binding'   : 'purple_binding',

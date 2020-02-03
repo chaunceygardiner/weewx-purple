@@ -91,16 +91,21 @@ import logging
 import os
 import requests
 import sys
+import threading
 import time
 
 from dateutil import tz
 from dateutil.parser import parse
+
+from dataclasses import dataclass, field
+from typing import Any, Dict, IO, Iterator, List, Optional, Tuple
 
 import weewx
 import weeutil.weeutil
 
 from weeutil.weeutil import timestamp_to_string
 from weeutil.weeutil import to_bool
+from weeutil.weeutil import to_float
 from weeutil.weeutil import to_int
 from weewx.engine import StdService
 import weewx.units
@@ -130,6 +135,22 @@ class Source:
         else:
             self.port = to_int(source_dict.get('port', 80))
         self.timeout  = to_int(source_dict.get('timeout', 10))
+
+@dataclass
+class Concentrations:
+    timestamp: float
+    pm1_0    : float
+    pm2_5    : float
+    pm10_0   : float
+
+@dataclass
+class Configuration:
+    lock            : threading.Lock
+    concentrations  : Concentrations # Controlled by lock
+    archive_interval: int            # Immutable
+    archive_delay   : int            # Immutable
+    poll_interval   : int            # Immutable
+    sources         : List[Source]   # Immutable
 
 # set up appropriate units
 weewx.units.USUnits['group_concentration'] = 'microgram_per_meter_cubed'
@@ -214,14 +235,39 @@ def utc_now():
     tzinfos = {'CST': tz.gettz("UTC")}
     return datetime.datetime.now(tz=tz.gettz("UTC"))
 
-def collect_data(hostname, port, timeout, archive_interval, now_ts = None,
-                 proxy = False):
+def get_concentrations(cfg: Configuration):
+    for source in cfg.sources:
+        if source.enable:
+            record = collect_data(source.hostname,
+                                  source.port,
+                                  source.timeout,
+                                  cfg.archive_interval,
+                                  source.is_proxy)
+            if record is not None:
+                log.debug('get_concentrations: source: %s' % record)
+                reading_ts = to_int(record['dateTime'])
+                age_of_reading = time.time() - reading_ts
+                if age_of_reading > cfg.archive_interval:
+                    log.info('Reading from %s:%d is old: %d seconds.' % (
+                        source.hostname, source.port, age_of_reading))
+                    continue
+                concentrations = Concentrations(
+                    timestamp = reading_ts,
+                    pm1_0     = to_float(record['pm1_0_cf_1']),
+                    pm2_5     = to_float(record['pm2_5_cf_1']),
+                    pm10_0    = to_float(record['pm10_0_cf_1']))
+                # If there is a 'b' sensor, add it in and average the readings
+                log.debug('get_concentrations: concentrations BEFORE averaing in b reading: %s' % concentrations)
+                if 'pm1_0_cf_1_b' in record:
+                    concentrations.pm1_0 = (concentrations.pm1_0 + to_float(record['pm1_0_cf_1_b'])) / 2.0
+                    concentrations.pm2_5 = (concentrations.pm2_5 + to_float(record['pm2_5_cf_1_b'])) / 2.0
+                    concentrations.pm10_0 = (concentrations.pm10_0 + to_float(record['pm10_0_cf_1_b'])) / 2.0
+                log.debug('get_concentrations: concentrations: %s' % concentrations)
+                return concentrations
+    log.error('Could not get concentrations from any source.')
+    return None
 
-    if now_ts is None:
-        now_ts = int(time.time() + 0.5)
-
-    # This request could come late.  We need to make sure we're on the archive interval.
-    now_ts = int(now_ts / archive_interval) * archive_interval # kill seconds
+def collect_data(hostname, port, timeout, archive_interval, proxy = False):
 
     j = None
     if proxy:
@@ -259,7 +305,7 @@ def collect_data(hostname, port, timeout, archive_interval, now_ts = None,
 
     # create a record
     log.debug('Successful read from %s.' % hostname)
-    return populate_record(now_ts, j)
+    return populate_record(time_of_reading.timestamp(), j)
 
 def populate_record(ts, j):
     record = dict()
@@ -288,7 +334,7 @@ def populate_record(ts, j):
         record['purple_pressure'] = pressure
 
     if missed:
-        log.info("sensor didn't report field(s): %s" % ','.join(missed))
+        log.info("Sensor didn't report field(s): %s" % ','.join(missed))
 
     # for each concentration counter, grab A, B and the average of the A and B channels and push into the record
     for key in ['pm1_0_cf_1', 'pm1_0_atm', 'pm2_5_cf_1', 'pm2_5_atm', 'pm10_0_cf_1', 'pm10_0_atm']:
@@ -335,8 +381,6 @@ class Purple(StdService):
         log.info("Service version is %s." % WEEWX_PURPLE_VERSION)
 
         self.engine = engine
-        self.archive_interval = int(config_dict['StdArchive']['archive_interval'])
-        self.archive_delay = weeutil.weeutil.to_int(config_dict['StdArchive'].get('archive_delay', 15))
         self.config_dict = config_dict.get('Purple', {})
 
         # get the database parameters we need to function
@@ -347,11 +391,18 @@ class Purple(StdService):
             config_dict['Databases'],
             self.data_binding)
 
-        # Returns proxies followed by sensors.
-        self.sources = Purple.configure_sources(self.config_dict)
+        self.cfg = Configuration(
+            lock             = threading.Lock(),
+            concentrations   = None,
+            archive_interval = int(config_dict['StdArchive']['archive_interval']),
+            archive_delay    = to_int(config_dict['StdArchive'].get('archive_delay', 15)),
+            poll_interval    = 5,
+            sources          = Purple.configure_sources(self.config_dict))
+        with self.cfg.lock:
+            self.cfg.concentrations = get_concentrations(self.cfg)
 
         source_count = 0
-        for source in self.sources:
+        for source in self.cfg.sources:
             if source.enable: 
                 source_count += 1
                 log.info(
@@ -361,8 +412,35 @@ class Purple(StdService):
         if source_count == 0:
             log.error('No sources configured for purple extension.  Purple extension is inoperable.')
         else:
+            # Start a thread to query proxies and make aqi available to loopdata
+            dp: DevicePoller = DevicePoller(self.cfg)
+            t: threading.Thread = threading.Thread(target=dp.poll_device)
+            t.setName('Purple')
+            t.setDaemon(True)
+            t.start()
+
             self.bind(weewx.STARTUP, self._catchup)
+            self.bind(weewx.NEW_LOOP_PACKET, self.new_loop_packet)
+            self.bind(weewx.NEW_ARCHIVE_RECORD, self.new_archive_record)
             self.bind(weewx.END_ARCHIVE_PERIOD, self.end_archive_period)
+
+    def new_archive_record(self, event):
+        log.debug('new_archive_record: %s' % event)
+
+    def new_loop_packet(self, event):
+        log.debug('new_loop_packet(%s)' % event)
+        with self.cfg.lock:
+            log.debug('new_loop_packet: self.cfg.concentrations: %s' % self.cfg.concentrations)
+            if self.cfg.concentrations.timestamp + self.cfg.archive_interval >= time.time():
+                event.packet['pm1_0'] = self.cfg.concentrations.pm1_0
+                event.packet['pm2_5'] = self.cfg.concentrations.pm2_5
+                event.packet['pm10_0'] = self.cfg.concentrations.pm10_0
+                log.debug('Time of reading being inserted: %s' % timestamp_to_string(self.cfg.concentrations.timestamp))
+                log.debug('Inserted packet[pm1_0]: %f into packet.' % self.cfg.concentrations.pm1_0)
+                log.debug('Inserted packet[pm2_5]: %f into packet.' % self.cfg.concentrations.pm2_5)
+                log.debug('Inserted packet[pm10_0]: %f into packet.' % self.cfg.concentrations.pm10_0)
+            else:
+                log.error('Found no fresh concentrations to insert.')
 
     def configure_sources(config_dict):
         sources = []
@@ -421,7 +499,7 @@ class Purple(StdService):
             # clock drift.
             for record in self.genStartupRecords(lastgood_ts):
                 ts = record.get('dateTime')
-                if ts and ts < time.time() + self.archive_delay:
+                if ts and ts < time.time() + self.cfg.archive_delay:
                     log.debug('__init__: saving record(%s): %r.' % (timestamp_to_string(record['dateTime']), record))
                     self.save_data(record)
                 else:
@@ -429,44 +507,6 @@ class Purple(StdService):
         except Exception as e:
             log.error('**** Exception attempting to read archive records: %s' % e)
             weeutil.logger.log_traceback(log.critical, "    ****  ")
-
-    def end_archive_period(self, _event):
-        """create a new archive record and save it to the database"""
-        try:
-            now = int(time.time() + 0.5)
-            data = self.get_data(now)
-            if data is None:
-                log.error("get_data returned None.  No record to save.  %r" % now)
-            if data is not None:
-                self.save_data(data)
-        except Exception as e:
-            # Include a stack traceback in the log:
-            # but eat this exception as we don't want to bring down weewx
-            # because the PurpleAir sensor is unavailable.
-            weeutil.logger.log_traceback(log.critical, "    ****  ")
-
-    def save_data(self, record):
-        """save data to database"""
-        dbmanager = self.engine.db_binder.get_manager(self.data_binding)
-        dbmanager.addRecord(record)
-
-    def get_data(self, now_ts):
-        for source in self.sources:
-            if source.enable:
-                record = collect_data(source.hostname,
-                                      source.port,
-                                      source.timeout,
-                                      self.archive_interval,
-                                      now_ts,
-                                      source.is_proxy)
-                if record is not None:
-                    break
-
-        if record is None:
-            return None
-
-        record['interval'] = self.archive_interval / 60
-        return record
 
     def get_proxy_version(hostname, port, timeout):
         try:
@@ -510,7 +550,7 @@ class Purple(StdService):
         timeout = None
 
         checkpoint_ts = since_ts
-        for source in self.sources:
+        for source in self.cfg.sources:
             if source.is_proxy:
                 if source.enable:
                     version= Purple.get_proxy_version(source.hostname,
@@ -555,7 +595,7 @@ class Purple(StdService):
                                             checkpoint_ts = reading_ts
                                             # create a record
                                             pkt = populate_record(reading_ts, reading)
-                                            pkt['interval'] = self.archive_interval / 60
+                                            pkt['interval'] = self.cfg.archive_interval / 60
                                             log.debug('genStartupRecords: pkt(%s): %r.' % (timestamp_to_string(pkt['dateTime']), pkt))
                                             log.debug('packet: %s' % pkt)
                                             log.debug('genStartupRecords: added record: %s' % time_of_reading)
@@ -570,6 +610,66 @@ class Purple(StdService):
         log.info('No proxy from which to fetch PurpleAir records.')
         return
 
+    def end_archive_period(self, _event):
+        """create a new archive record and save it to the database"""
+        try:
+            now = int(time.time() + 0.5)
+            data = self.get_data(now)
+            if data is None:
+                log.error("get_data returned None.  No record to save.  %r" % now)
+            if data is not None:
+                self.save_data(data)
+        except Exception as e:
+            # Include a stack traceback in the log:
+            # but eat this exception as we don't want to bring down weewx
+            # because the PurpleAir sensor is unavailable.
+            weeutil.logger.log_traceback(log.critical, "    ****  ")
+
+    def save_data(self, record):
+        """save data to database"""
+        dbmanager = self.engine.db_binder.get_manager(self.data_binding)
+        dbmanager.addRecord(record)
+
+    def get_data(self, now_ts):
+        for source in self.cfg.sources:
+            if source.enable:
+                record = collect_data(source.hostname,
+                                      source.port,
+                                      source.timeout,
+                                      self.cfg.archive_interval,
+                                      source.is_proxy)
+                if record is not None:
+                    break
+
+        if record is None:
+            return None
+
+        # Align timestamp to archive interval
+        record['dateTime'] = int(record['dateTime'] / self.cfg.archive_interval) * self.cfg.archive_interval # Align on archive interval.
+
+        record['interval'] = self.cfg.archive_interval / 60
+        return record
+
+class DevicePoller:
+    def __init__(self, cfg: Configuration):
+        self.cfg = cfg
+
+    def poll_device(self) -> None:
+        log.debug('poll_device: start')
+        while True:
+            try:
+                log.debug('poll_device: calling get_concentrations.')
+                concentrations = get_concentrations(self.cfg)
+            except Exception as e:
+                log.error('poll_device exception: %s' % e)
+                weeutil.logger.log_traceback(log.critical, "    ****  ")
+                concentrations = None
+            log.debug('poll_device: concentrations: %s' % concentrations)
+            if concentrations is not None:
+                with self.cfg.lock:
+                    self.cfg.concentrations = concentrations
+            log.debug('poll_device: Sleeping for %d seconds.' % self.cfg.poll_interval)
+            time.sleep(self.cfg.poll_interval)
 
 if __name__ == "__main__":
     usage = """%prog [options] [--help] [--debug]"""
@@ -652,7 +752,7 @@ if __name__ == "__main__":
                     'interval': 1
                 }
                 event = weewx.Event(weewx.END_ARCHIVE_PERIOD, record=record)
-                svc.new_archive_record(event)
+                svc.end_archive_record(event)
 
                 time.sleep(5)
     main()
