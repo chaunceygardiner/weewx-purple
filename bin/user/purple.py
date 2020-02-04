@@ -123,42 +123,21 @@ if weewx.__version__ < "4":
     raise weewx.UnsupportedFeature(
         "WeeWX 4 is required, found %s" % weewx.__version__)
 
-class Source:
-    def __init__(self, config_dict, name, is_proxy):
-        self.is_proxy = is_proxy
-        # Raise KeyEror if name not in dictionary.
-        source_dict = config_dict[name]
-        self.enable = to_bool(source_dict.get('enable', False))
-        self.hostname = source_dict.get('hostname', '')
-        if is_proxy:
-            self.port = to_int(source_dict.get('port', 8000))
-        else:
-            self.port = to_int(source_dict.get('port', 80))
-        self.timeout  = to_int(source_dict.get('timeout', 10))
+# Set up observation types not in weewx.units
 
-@dataclass
-class Concentrations:
-    timestamp: float
-    pm1_0    : float
-    pm2_5    : float
-    pm10_0   : float
-
-@dataclass
-class Configuration:
-    lock            : threading.Lock
-    concentrations  : Concentrations # Controlled by lock
-    archive_interval: int            # Immutable
-    archive_delay   : int            # Immutable
-    poll_interval   : int            # Immutable
-    sources         : List[Source]   # Immutable
-
-# set up appropriate units
-
-weewx.units.USUnits['air_quality_index'] = 'aqi'
-weewx.units.MetricUnits['air_quality_index'] = 'aqi'
+weewx.units.USUnits['air_quality_index']       = 'aqi'
+weewx.units.MetricUnits['air_quality_index']   = 'aqi'
 weewx.units.MetricWXUnits['air_quality_index'] = 'aqi'
-weewx.units.default_unit_format_dict['aqi'] = '%d'
+
+weewx.units.USUnits['air_quality_color']       = 'aqic'
+weewx.units.MetricUnits['air_quality_color']   = 'aqic'
+weewx.units.MetricWXUnits['air_quality_color'] = 'aqic'
+
 weewx.units.default_unit_label_dict['aqi']  = ' AQI'
+weewx.units.default_unit_label_dict['aqic'] = ' RGB'
+
+weewx.units.default_unit_format_dict['aqi']  = '%d'
+weewx.units.default_unit_format_dict['aqic'] = '%d'
 
 # assign types of units to specific measurements
 weewx.units.obs_group_dict['purple_temperature'] = 'group_temperature'
@@ -187,6 +166,12 @@ weewx.units.obs_group_dict['pm2_5_aqi'] = 'air_quality_index'
 weewx.units.obs_group_dict['pm2_5_aqi_b'] = 'air_quality_index'
 weewx.units.obs_group_dict['pm2_5_aqi_avg'] = 'air_quality_index'
 
+weewx.units.obs_group_dict['pm2_5_aqic'] = 'air_quality_color'
+weewx.units.obs_group_dict['pm2_5_aqic_b'] = 'air_quality_color'
+weewx.units.obs_group_dict['pm2_5_aqic_avg'] = 'air_quality_color'
+
+# Schema for purple database (purple.sdb).  Note: this separate database
+# may disappear in favor of adding fields to weewx.sdb.
 schema = [
     ('dateTime', 'INTEGER NOT NULL PRIMARY KEY'),
     ('usUnits', 'INTEGER NOT NULL'),
@@ -221,6 +206,43 @@ schema = [
     ('p25aqic_avg', 'INTEGER'),
     ]
 
+class Source:
+    def __init__(self, config_dict, name, is_proxy):
+        self.is_proxy = is_proxy
+        # Raise KeyEror if name not in dictionary.
+        source_dict = config_dict[name]
+        self.enable = to_bool(source_dict.get('enable', False))
+        self.hostname = source_dict.get('hostname', '')
+        if is_proxy:
+            self.port = to_int(source_dict.get('port', 8000))
+        else:
+            self.port = to_int(source_dict.get('port', 80))
+        self.timeout  = to_int(source_dict.get('timeout', 10))
+
+@dataclass
+class Rgb:
+    red  : int
+    green: int
+    blue :  int
+
+@dataclass
+class Concentrations:
+    timestamp: float
+    pm1_0     : float
+    pm2_5     : float
+    pm10_0    : float
+    pm2_5_aqi : int
+    pm2_5_aqic: Rgb
+
+@dataclass
+class Configuration:
+    lock            : threading.Lock
+    concentrations  : Concentrations # Controlled by lock
+    archive_interval: int            # Immutable
+    archive_delay   : int            # Immutable
+    poll_interval   : int            # Immutable
+    sources         : List[Source]   # Immutable
+
 def datetime_from_reading(dt_str):
     dt_str = dt_str.replace('z', 'UTC')
     tzinfos = {'CST': tz.gettz("UTC")}
@@ -247,20 +269,36 @@ def get_concentrations(cfg: Configuration):
                         source.hostname, source.port, age_of_reading))
                     continue
                 concentrations = Concentrations(
-                    timestamp = reading_ts,
-                    pm1_0     = to_float(record['pm1_0_cf_1']),
-                    pm2_5     = to_float(record['pm2_5_cf_1']),
-                    pm10_0    = to_float(record['pm10_0_cf_1']))
+                    timestamp  = reading_ts,
+                    pm1_0      = to_float(record['pm1_0_cf_1']),
+                    pm2_5      = to_float(record['pm2_5_cf_1']),
+                    pm10_0     = to_float(record['pm10_0_cf_1']),
+                    pm2_5_aqi  = to_int(record['pm2_5_aqi']),
+                    pm2_5_aqic = int_to_rgb(record['p25aqic'])
+                )
                 # If there is a 'b' sensor, add it in and average the readings
                 log.debug('get_concentrations: concentrations BEFORE averaing in b reading: %s' % concentrations)
                 if 'pm1_0_cf_1_b' in record:
-                    concentrations.pm1_0 = (concentrations.pm1_0 + to_float(record['pm1_0_cf_1_b'])) / 2.0
-                    concentrations.pm2_5 = (concentrations.pm2_5 + to_float(record['pm2_5_cf_1_b'])) / 2.0
-                    concentrations.pm10_0 = (concentrations.pm10_0 + to_float(record['pm10_0_cf_1_b'])) / 2.0
+                    concentrations.pm1_0      = (concentrations.pm1_0  + to_float(record['pm1_0_cf_1_b'])) / 2.0
+                    concentrations.pm2_5      = (concentrations.pm2_5  + to_float(record['pm2_5_cf_1_b'])) / 2.0
+                    concentrations.pm10_0     = (concentrations.pm10_0 + to_float(record['pm10_0_cf_1_b'])) / 2.0
+                    concentrations.pm2_5_aqi  = (concentrations.pm2_5_aqi    + to_float(record['pm2_5_aqi'])) / 2.0
+                    concentrations.pm2_5_aqic = average_rgbs(concentrations.pm2_5_aqic, int_to_rgb(record['p25aqic_b']))
                 log.debug('get_concentrations: concentrations: %s' % concentrations)
                 return concentrations
     log.error('Could not get concentrations from any source.')
     return None
+
+def rgb_to_int(rgb: Rgb) -> int:
+    return (rgb.red << 16) + (rgb.green << 8) + rgb.blue
+
+def int_to_rgb(i: int) -> Rgb:
+    return Rgb(i >> 16, (i & 0x00FF00) >> 8, i & 0xFF)
+
+def average_rgbs(rgb1: Rgb, rgb2: Rgb) -> Rgb:
+    return Rgb(int((rgb1.red   + rgb2.red   + 0.5) / 2),
+               int((rgb1.green + rgb2.green + 0.5) / 2),
+               int((rgb1.blue  + rgb2.blue  + 0.5) / 2))
 
 def collect_data(hostname, port, timeout, archive_interval, proxy = False):
 
@@ -355,6 +393,16 @@ def populate_record(ts, j):
 
     return record
 
+def decode_rgb(rgb_string: str) -> Rgb:
+    # rgb(61,234,0)
+    rgb_string = rgb_string.replace('rgb(', '')
+    # 61,234,0)
+    rgb_string = rgb_string.replace(')', '')
+    # 61,234,0
+    rgbs = rgb_string.split(',')
+    # [61, 234, 0]
+    return Rgb(rgbs[0]), int(rgbs[1]), int(rgbs[2])
+
 def rgb_convert_to_tuple(rgb_string):
     # rgb(61,234,0)
     rgb_string = rgb_string.replace('rgb(', '')
@@ -427,9 +475,12 @@ class Purple(StdService):
         with self.cfg.lock:
             log.debug('new_loop_packet: self.cfg.concentrations: %s' % self.cfg.concentrations)
             if self.cfg.concentrations.timestamp + self.cfg.archive_interval >= time.time():
+                # Insert pm1_0, pm2_5, pm10_0, aqi and aqic into loop packet.
                 event.packet['pm1_0'] = self.cfg.concentrations.pm1_0
                 event.packet['pm2_5'] = self.cfg.concentrations.pm2_5
                 event.packet['pm10_0'] = self.cfg.concentrations.pm10_0
+                event.packet['pm2_5_aqi'] = self.cfg.concentrations.pm2_5_aqi
+                event.packet['pm2_5_aqic'] = rgb_to_int(self.cfg.concentrations.pm2_5_aqic)
                 log.debug('Time of reading being inserted: %s' % timestamp_to_string(self.cfg.concentrations.timestamp))
                 log.debug('Inserted packet[pm1_0]: %f into packet.' % self.cfg.concentrations.pm1_0)
                 log.debug('Inserted packet[pm2_5]: %f into packet.' % self.cfg.concentrations.pm2_5)
