@@ -691,8 +691,10 @@ class Purple(StdService):
             return None
 
         # Align timestamp to archive interval
-        record['dateTime'] = int(record['dateTime'] / self.cfg.archive_interval) * self.cfg.archive_interval # Align on archive interval.
+        now_ts = int(time.time() + 0.5)
+        record['dateTime'] = int(now_ts / self.cfg.archive_interval) * self.cfg.archive_interval
 
+        # Archive interval is expressed in minutes in the archive record.
         record['interval'] = self.cfg.archive_interval / 60
         return record
 
