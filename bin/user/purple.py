@@ -474,7 +474,7 @@ class Purple(StdService):
         log.debug('new_loop_packet(%s)' % event)
         with self.cfg.lock:
             log.debug('new_loop_packet: self.cfg.concentrations: %s' % self.cfg.concentrations)
-            if self.cfg.concentrations.timestamp + self.cfg.archive_interval >= time.time():
+            if self.cfg.concentrations.timestamp is not None and self.cfg.concentrations.timestamp + self.cfg.archive_interval >= time.time():
                 # Insert pm1_0, pm2_5, pm10_0, aqi and aqic into loop packet.
                 event.packet['pm1_0'] = self.cfg.concentrations.pm1_0
                 event.packet['pm2_5'] = self.cfg.concentrations.pm2_5
