@@ -318,10 +318,10 @@ def collect_data(hostname, port, timeout, archive_interval, proxy = False):
             j = r.json()
             log.debug('collect_data: json returned from %s is: %r' % (
                 hostname, j))
+            time_of_reading = datetime_from_reading(j['DateTime'])
             # If proxy, the reading could be old.
             if proxy:
                 #Check that it's not older than now - arcint
-                time_of_reading = datetime_from_reading(j['DateTime'])
                 age_of_reading = utc_now() - time_of_reading
                 if age_of_reading.seconds > archive_interval:
                     # Nothing current, will have to read directly for PurpleAir device.
