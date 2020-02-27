@@ -561,6 +561,7 @@ class Purple(StdService):
         try:
             url = 'http://%s:%s/get-version' % (hostname, port)
             r = requests.get(url=url, timeout=timeout)
+            r.raise_for_status()
             log.debug('get-proxy-version: r: %s' % r)
             if r is None:
                 log.debug('get-proxy-version: request returned None')
@@ -576,6 +577,7 @@ class Purple(StdService):
         try:
             url = 'http://%s:%s/get-earliest-timestamp' % (hostname, port)
             r = requests.get(url=url, timeout=timeout)
+            r.raise_for_status()
             log.debug('get-earliest-timestamp: r: %s' % r)
             if r is None:
                 log.debug('get-earliest-timestamp: request returned None')
@@ -625,6 +627,7 @@ class Purple(StdService):
                                     hostname, port, checkpoint_ts)
                                 log.debug('genStartupRecords: url: %s' % url)
                                 r = requests.get(url=url, timeout=timeout)
+                                r.raise_for_status()
                                 log.debug('genStartupRecords: %s returned %r' % (url, r))
                                 if r:
                                     # convert to json
