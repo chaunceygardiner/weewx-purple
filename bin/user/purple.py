@@ -449,9 +449,9 @@ class Purple(StdService):
             if source.enable: 
                 source_count += 1
                 log.info(
-                    'Source %d for PurpleAir readings: %s %s:%s, timeout: %d' % (
+                    'Source %d for PurpleAir readings: %s %s:%s, proxy: %s, timeout: %d' % (
                     source_count, 'purple-proxy' if source.is_proxy else 'sensor',
-                    source.hostname, source.port, source.timeout))
+                    source.hostname, source.port, source.is_proxy, source.timeout))
         if source_count == 0:
             log.error('No sources configured for purple extension.  Purple extension is inoperable.')
         else:
