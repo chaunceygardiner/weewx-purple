@@ -312,6 +312,7 @@ def collect_data(hostname, port, timeout, archive_interval, proxy = False):
         # fetch data
         log.debug('collect_data: fetching from url: %s, timeout: %d' % (url, timeout))
         r = requests.get(url=url, timeout=timeout)
+        r.raise_for_status()
         log.debug('collect_data: %s returned %r' % (hostname, r))
         if r:
             # convert to json
@@ -372,24 +373,32 @@ def populate_record(ts, j):
     # for each concentration counter, grab A, B and the average of the A and B channels and push into the record
     for key in ['pm1_0_cf_1', 'pm1_0_atm', 'pm2_5_cf_1', 'pm2_5_atm', 'pm10_0_cf_1', 'pm10_0_atm']:
         record[key] = j[key]
-        record[key + '_b'] = j[key + '_b']
-        record[key + '_avg'] = (j[key] + j[key + '_b']) / 2.0
+        key_b = key + '_b'
+        if key_b in j.keys():
+            record[key_b] = j[key_b]
+            record[key + '_avg'] = (j[key] + j[key_b]) / 2.0
 
     # grab AQI for A, B and the average of the A and B channels and push into the record
-    record['pm2_5_aqi'] = j['pm2.5_aqi']
-    record['pm2_5_aqi_b'] = j['pm2.5_aqi_b']
-    record['pm2_5_aqi_avg'] = int((j['pm2.5_aqi'] + j['pm2.5_aqi_b']) / 2 + 0.5)
+    key = 'pm2.5_aqi'
+    record['pm2_5_aqi'] = j[key]
+    key_b = key + '_b'
+    if key_b in j.keys():
+        record['pm2_5_aqi_b'] = j[key_b]
+        record['pm2_5_aqi_avg'] = int((j['pm2.5_aqi'] + j[key_b]) / 2 + 0.5)
 
     # grap AQIC (rgb value representing AQI) for A, B and average
-    rgb = rgb_convert_to_tuple(j['p25aqic'])
-    rgb_b = rgb_convert_to_tuple(j['p25aqic_b'])
-    rgb_avg = (
-        int((rgb[0] + rgb_b[0]) / 2 + 0.5),
-        int((rgb[1] + rgb_b[1]) / 2 + 0.5),
-        int((rgb[2] + rgb_b[2]) / 2 + 0.5))
+    key = 'p25aqic'
+    rgb = rgb_convert_to_tuple(j[key])
     record['p25aqic'] = convert_rgb_tuple_to_int(rgb)
-    record['p25aqic_b'] = convert_rgb_tuple_to_int(rgb_b)
-    record['p25aqic_avg'] = convert_rgb_tuple_to_int(rgb_avg)
+    key_b = key + '_b'
+    if key_b in j.keys():
+        rgb_b = rgb_convert_to_tuple(j[key_b])
+        rgb_avg = (
+            int((rgb[0] + rgb_b[0]) / 2 + 0.5),
+            int((rgb[1] + rgb_b[1]) / 2 + 0.5),
+            int((rgb[2] + rgb_b[2]) / 2 + 0.5))
+        record['p25aqic_b'] = convert_rgb_tuple_to_int(rgb_b)
+        record['p25aqic_avg'] = convert_rgb_tuple_to_int(rgb_avg)
 
     return record
 
