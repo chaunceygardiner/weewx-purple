@@ -569,17 +569,18 @@ class Purple(StdService):
     def get_proxy_version(hostname, port, timeout):
         try:
             url = 'http://%s:%s/get-version' % (hostname, port)
+            log.debug('get-proxy-version: url: %s' % url)
             r = requests.get(url=url, timeout=timeout)
             r.raise_for_status()
             log.debug('get-proxy-version: r: %s' % r)
             if r is None:
                 log.debug('get-proxy-version: request returned None')
-                return Non
+                return None
             j = r.json()
             log.debug('get_proxy_version: returning version %s for %s.' % (j['version'], hostname))
             return j['version']
         except Exception as e:
-            log.debug('Could not get version from proxy %s: %s.  Down?' % (hostname, e))
+            log.info('Could not get version from proxy %s: %s.  Down?' % (hostname, e))
             return None
 
     def get_earliest_timestamp(hostname, port, timeout):
@@ -611,10 +612,13 @@ class Purple(StdService):
 
         checkpoint_ts = since_ts
         for source in self.cfg.sources:
+            log.debug('genStartupRecords: source.enable: %s, source.hostname: %s, source.port: %d, source.timeout: %d'
+                % (source.enable, source.hostname, source.port, source.timeout))
             if source.is_proxy:
                 if source.enable:
                     version= Purple.get_proxy_version(source.hostname,
                         source.port, source.timeout)
+                    log.debug('genStartupRecords: version: %s' % version)
                     if version is not None:
                         hostname = source.hostname
                         port     = source.port
@@ -627,7 +631,7 @@ class Purple(StdService):
                                 if fetch_count is None:
                                     fetch_count = 0
                                 elif fetch_count == 0:
-                                    log.debug('Done fetching.  Last select fetched: %d records' % fetch_count)
+                                    log.debug('Done fetching.')
                                     break
                                 else:
                                     log.debug('Last select fetched: %d records' % fetch_count)
