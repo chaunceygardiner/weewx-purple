@@ -81,8 +81,6 @@ Installation instructions.
 
 """
 
-from __future__ import absolute_import
-from __future__ import print_function
 import calendar
 import configobj
 import datetime
@@ -109,7 +107,6 @@ from weeutil.weeutil import to_float
 from weeutil.weeutil import to_int
 from weewx.engine import StdService
 import weewx.units
-from six.moves import range
 
 log = logging.getLogger(__name__)
 
@@ -300,6 +297,50 @@ def average_rgbs(rgb1: Rgb, rgb2: Rgb) -> Rgb:
                int((rgb1.green + rgb2.green + 0.5) / 2),
                int((rgb1.blue  + rgb2.blue  + 0.5) / 2))
 
+def is_type(j: Dict[str, Any], t, names: List[str]) -> bool:
+    try:
+        for name in names:
+          x = j[name]
+          if not isinstance(x, t):
+              log.info('%s is not an instance of %s: %s' % (name, t, j[name]))
+              return False
+        return True
+    except KeyError as e:
+        log.info('is_type: could not find key: %s' % e)
+        return False
+    except Exception as e:
+        log.info('is_type: exception: %s' % e)
+        return False
+
+def is_sane(j: Dict[str, Any]) -> bool:
+    time_of_reading = datetime_from_reading(j['DateTime'])
+    if not isinstance(time_of_reading, datetime.datetime):
+        log.info('DateTime is not an instance of datetime: %s' % j['DateTime'])
+        return False
+
+    if not is_type(j, int, ['current_temp_f','current_humidity','current_dewpoint_f']):
+        return False
+
+    if not is_type(j, float, ['pressure']):
+        return False
+
+    # Sensor A
+    if not is_type(j, float, ['pm1_0_cf_1','pm1_0_atm','p_0_3_um','pm2_5_cf_1',
+            'pm2_5_atm','p_0_5_um','pm10_0_cf_1','pm10_0_atm']):
+        return False
+    if not is_type(j, int, ['pm2.5_aqi']):
+        return False
+
+    # Sensor B
+    if 'pm2.5_aqi_b' in j:
+        if not is_type(j, float, ['pm1_0_cf_1_b','pm1_0_atm_b','p_0_3_um_b','pm2_5_cf_1_b',
+                'pm2_5_atm_b','p_0_5_um_b','pm10_0_cf_1_b','pm10_0_atm_b']):
+            return False
+        if not is_type(j, int, ['pm2.5_aqi_b']):
+            return False
+
+    return True
+
 def collect_data(hostname, port, timeout, archive_interval, proxy = False):
 
     j = None
@@ -317,9 +358,12 @@ def collect_data(hostname, port, timeout, archive_interval, proxy = False):
         if r:
             # convert to json
             j = r.json()
-            log.debug('collect_data: json returned from %s is: %r' % (
-                hostname, j))
+            log.debug('collect_data: json returned from %s is: %r' % (hostname, j))
             time_of_reading = datetime_from_reading(j['DateTime'])
+            # Check for sanity
+            if not is_sane(j):
+                log.info('purpleair reading not sane: %s' % j)
+                return None
             # If proxy, the reading could be old.
             if proxy:
                 #Check that it's not older than now - arcint
@@ -455,7 +499,7 @@ class Purple(StdService):
 
         source_count = 0
         for source in self.cfg.sources:
-            if source.enable: 
+            if source.enable:
                 source_count += 1
                 log.info(
                     'Source %d for PurpleAir readings: %s %s:%s, proxy: %s, timeout: %d' % (
@@ -754,6 +798,8 @@ if __name__ == "__main__":
                           help="The data binding to use. Default is 'purple_binding'.")
         parser.add_option('--test-collector', dest='tc', action='store_true',
                           help='test the data collector')
+        parser.add_option('--test-is-sane', dest='sane_test', action='store_true',
+                          help='test the is_sane function')
         parser.add_option('--hostname', dest='hostname', action='store',
                           help='hostname to use with --test-collector')
         parser.add_option('--port', dest='port', action='store',
@@ -769,7 +815,9 @@ if __name__ == "__main__":
             if not options.hostname:
                 parser.error('--test-collector requires --hostname argument')
             test_collector(options.hostname, options.port)
-        elif options.ts:
+        if options.sane_test:
+            test_is_sane()
+        elif options.sane_test:
             if not options.hostname:
                 parser.error('--test-service requires --hostname argument')
             test_service(options.hostname, options.port)
@@ -778,6 +826,58 @@ if __name__ == "__main__":
         while True:
             print(collect_data(hostname, port, 10, 300))
             time.sleep(5)
+
+    def test_is_sane():
+        good_proxy = ('{"DateTime": "2020/03/20T17:16:00z", "current_temp_f": 61,'
+            ' "current_humidity": 49, "current_dewpoint_f": 41, "pressure": 1024.255,'
+            ' "pm1_0_cf_1": 2.39, "pm1_0_atm": 2.39, "p_0_3_um": 641.75,'
+            ' "pm2_5_cf_1": 3.85, "pm2_5_atm": 3.85, "p_0_5_um": 179.98,'
+            ' "pm10_0_cf_1": 5.17, "pm10_0_atm": 5.17, "pm2.5_aqi": 16,'
+            ' "p25aqic": "rgb(8,229,0)", "pm1_0_cf_1_b": 1.86, "pm1_0_atm_b": 1.86,'
+            ' "p_0_3_um_b": 544.5, "pm2_5_cf_1_b": 2.97, "pm2_5_atm_b": 2.97,'
+            ' "p_0_5_um_b": 149.48, "pm10_0_cf_1_b": 3.41, "pm10_0_atm_b": 3.41,'
+            ' "pm2.5_aqi_b": 12, "p25aqic_b": "rgb(4,228,0)"}')
+        good_device = ('{"SensorId":"84:f3:eb:36:38:fe","DateTime":"2020/03/20T17:18:02z",'
+            '"Geo":"PurpleAir-38fe","Mem":19176,"memfrag":15,"memfb":16360,"memcs":768,'
+            '"Id":16220,"lat":37.431599,"lon":-122.111000,"Adc":0.03,"loggingrate":15,'
+            '"place":"outside","version":"6.01","uptime":215685,"rssi":-59,"period":120,'
+            '"httpsuccess":10842,"httpsends":10842,"hardwareversion":"2.0",'
+            '"hardwarediscovered":"2.0+OPENLOG+NO-DISK+DS3231+BME280+PMSX003-B+PMSX003-A",'
+            '"current_temp_f":61,"current_humidity":48,"current_dewpoint_f":41,'
+            '"pressure":1024.30,"p25aqic_b":"rgb(4,228,0)","pm2.5_aqi_b":12,'
+            '"pm1_0_cf_1_b":1.63,"p_0_3_um_b":556.21,"pm2_5_cf_1_b":2.95,'
+            '"p_0_5_um_b":150.61,"pm10_0_cf_1_b":3.25,"p_1_0_um_b":22.58,'
+            '"pm1_0_atm_b":1.63,"p_2_5_um_b":2.11,"pm2_5_atm_b":2.95,"p_5_0_um_b":0.46,'
+            '"pm10_0_atm_b":3.25,"p_10_0_um_b":0.26,"p25aqic":"rgb(10,229,0)",'
+            '"pm2.5_aqi":17,"pm1_0_cf_1":2.20,"p_0_3_um":637.30,"pm2_5_cf_1":4.02,'
+            '"p_0_5_um":174.22,"pm10_0_cf_1":4.43,"p_1_0_um":28.53,"pm1_0_atm":2.20,'
+            '"p_2_5_um":3.97,"pm2_5_atm":4.02,"p_5_0_um":0.50,"pm10_0_atm":4.43,'
+            '"p_10_0_um":0.50,"pa_latency":338,"response":201,"response_date":1584724649,'
+            '"latency":355,"key1_response":200,"key1_response_date":1584724642,'
+            '"key1_count":81455,"ts_latency":805,"key2_response":200,'
+            '"key2_response_date":1584724644,"key2_count":81455,"ts_s_latency":796,'
+            '"key1_response_b":200,"key1_response_date_b":1584724645,"key1_count_b":81444,'
+            '"ts_latency_b":772,"key2_response_b":200,"key2_response_date_b":1584724647,'
+            '"key2_count_b":81446,"ts_s_latency_b":796,"wlstate":"Connected","status_0":2,'
+            '"status_1":2,"status_2":2,"status_3":2,"status_4":2,"status_5":2,"status_6":2,'
+            '"status_7":0,"status_8":2,"status_9":2,"ssid":"ella"}')
+        bad = ('{"DateTime":"2020/03/20T16:01:38z","current_temp_f":54,'
+            '"current_humidity":58,"current_dewpoint_f":39,"pressure":1022.78,'
+            '"p25aqic_b":"rgb(19,230,0)","pm2.5_aqi_b":21,"pm1_0_cf_1_b":"nan",'
+            '"p_0_3_um_b":701.02,"pm2_5_cf_1_b":5.15,"p_0_5_um_b":197.89,'
+            '"pm10_0_cf_1_b":6.16,"p_1_0_um_b":35.84,"pm1_0_atm_b":3.11,'
+            '"p_2_5_um_b":4.45,"pm2_5_atm_b":5.15,"p_5_0_um_b":1.24,'
+            '"pm10_0_atm_b":6.16,"p_10_0_um_b":0.96,"p25aqic":"rgb(36,232,0)",'
+            '"pm2.5_aqi":26,"pm1_0_cf_1":3.60,"p_0_3_um":873.50,'
+            '"pm2_5_cf_1":6.13,"p_0_5_um":245.18,"pm10_0_cf_1":6.80,'
+            '"p_1_0_um":37.50,"pm1_0_atm":3.60,"p_2_5_um":6.47,"pm2_5_atm":6.13,'
+            '"p_5_0_um":0.77,"pm10_0_atm":6.80,"p_10_0_um":0.77}')
+        j = json.loads(good_proxy)
+        assert(is_sane(j))
+        j = json.loads(good_device)
+        assert(is_sane(j))
+        j = json.loads(bad)
+        assert(not is_sane(j))
 
     def test_service(hostname, port):
         from weewx.engine import StdEngine
