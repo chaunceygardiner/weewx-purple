@@ -861,7 +861,16 @@ if __name__ == "__main__":
             '"key2_count_b":81446,"ts_s_latency_b":796,"wlstate":"Connected","status_0":2,'
             '"status_1":2,"status_2":2,"status_3":2,"status_4":2,"status_5":2,"status_6":2,'
             '"status_7":0,"status_8":2,"status_9":2,"ssid":"ella"}')
-        bad = ('{"DateTime":"2020/03/20T16:01:38z","current_temp_f":54,'
+        bad_1 = ('{"SensorId":"84:f3:eb:36:38:fe","DateTime":"2020/03/18T05:23:59z",'
+            ' "current_temp_f":53, "current_humidity":57, "current_dewpoint_f":38,'
+            ' "pressure":1015.94, "pm1_0_cf_1":"nan", "pm1_0_atm":"nan", "p_0_3_um":"nan",'
+            ' "pm2_5_cf_1":"nan", "pm2_5_atm":"nan", "p_0_5_um":"nan", "pm10_0_cf_1":"nan",'
+            ' "pm10_0_atm":"nan", "pm2.5_aqi":"nan", "p25aqic":"rgb(0,255,255)",'
+            ' "pm1_0_cf_1_b":"nan", "pm1_0_atm_b":"nan", "p_0_3_um_b":"nan",'
+            ' "pm2_5_cf_1_b":"nan", "pm2_5_atm_b":"nan", "p_0_5_um_b":"nan",'
+            ' "pm10_0_cf_1_b":"nan", "pm10_0_atm_b":"nan",'
+            ' "pm2_5_aqi_b":"nan", "p25aqic_b":"rgb(0,255,255)"}')
+        bad_2 = ('{"DateTime":"2020/03/20T16:01:38z","current_temp_f":54,'
             '"current_humidity":58,"current_dewpoint_f":39,"pressure":1022.78,'
             '"p25aqic_b":"rgb(19,230,0)","pm2.5_aqi_b":21,"pm1_0_cf_1_b":"nan",'
             '"p_0_3_um_b":701.02,"pm2_5_cf_1_b":5.15,"p_0_5_um_b":197.89,'
@@ -876,7 +885,9 @@ if __name__ == "__main__":
         assert(is_sane(j))
         j = json.loads(good_device)
         assert(is_sane(j))
-        j = json.loads(bad)
+        j = json.loads(bad_1)
+        assert(not is_sane(j))
+        j = json.loads(bad_2)
         assert(not is_sane(j))
 
     def test_service(hostname, port):
