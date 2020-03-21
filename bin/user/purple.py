@@ -446,16 +446,6 @@ def populate_record(ts, j):
 
     return record
 
-def decode_rgb(rgb_string: str) -> Rgb:
-    # rgb(61,234,0)
-    rgb_string = rgb_string.replace('rgb(', '')
-    # 61,234,0)
-    rgb_string = rgb_string.replace(')', '')
-    # 61,234,0
-    rgbs = rgb_string.split(',')
-    # [61, 234, 0]
-    return Rgb(rgbs[0]), int(rgbs[1]), int(rgbs[2])
-
 def rgb_convert_to_tuple(rgb_string):
     # rgb(61,234,0)
     rgb_string = rgb_string.replace('rgb(', '')
@@ -614,8 +604,18 @@ class Purple(StdService):
         try:
             url = 'http://%s:%s/get-version' % (hostname, port)
             log.debug('get-proxy-version: url: %s' % url)
-            r = requests.get(url=url, timeout=timeout)
-            r.raise_for_status()
+            # If the machine was just rebooted, a Temporary filaure in name
+            # resolution is likely.  If so, try a three times.
+            for i in range(3):
+                try:
+                    r = requests.get(url=url, timeout=timeout)
+                    r.raise_for_status()
+                except requests.exceptions.ConnectionError as e:
+                    if i < 2 and 'Temporary failure in name resolution' in str(e):
+                        log.info('%s: Retrying request.' % e)
+                        time.sleep(5)
+                    else:
+                        raise e
             log.debug('get-proxy-version: r: %s' % r)
             if r is None:
                 log.debug('get-proxy-version: request returned None')
