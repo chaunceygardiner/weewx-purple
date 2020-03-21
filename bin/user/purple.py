@@ -604,14 +604,14 @@ class Purple(StdService):
         try:
             url = 'http://%s:%s/get-version' % (hostname, port)
             log.debug('get-proxy-version: url: %s' % url)
-            # If the machine was just rebooted, a Temporary filaure in name
-            # resolution is likely.  If so, try a three times.
+            # If the machine was just rebooted, a temporary failure in name
+            # resolution is likely.  As such, try three times.
             for i in range(3):
                 try:
                     r = requests.get(url=url, timeout=timeout)
                     r.raise_for_status()
                 except requests.exceptions.ConnectionError as e:
-                    if i < 2 and 'Temporary failure in name resolution' in str(e):
+                    if i < 2:
                         log.info('%s: Retrying request.' % e)
                         time.sleep(5)
                     else:
