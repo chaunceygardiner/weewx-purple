@@ -610,9 +610,10 @@ class Purple(StdService):
                 try:
                     r = requests.get(url=url, timeout=timeout)
                     r.raise_for_status()
+                    break
                 except requests.exceptions.ConnectionError as e:
                     if i < 2:
-                        log.info('%s: Retrying request.' % e)
+                        log.info('%s: Retrying.' % e)
                         time.sleep(5)
                     else:
                         raise e
