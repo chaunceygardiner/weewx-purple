@@ -98,6 +98,7 @@ from dateutil.parser import parse
 from dataclasses import dataclass, field
 from typing import Any, Dict, IO, Iterator, List, Optional, Tuple
 
+import weedb
 import weewx
 import weeutil.weeutil
 
@@ -112,9 +113,9 @@ log = logging.getLogger(__name__)
 
 WEEWX_PURPLE_VERSION = "1.0"
 
-if sys.version_info[0] < 3:
+if sys.version_info[0] < 3 or (sys.version_info[0] == 3 and sys.version_info[1] < 7):
     raise weewx.UnsupportedFeature(
-        "weewx-purple requires Python 3, found %s" % sys.version_info[0])
+        "weewx-loopdata requires Python 3.7 or later, found %s.%s" % (sys.version_info[0], sys.version_info[1]))
 
 if weewx.__version__ < "4":
     raise weewx.UnsupportedFeature(
