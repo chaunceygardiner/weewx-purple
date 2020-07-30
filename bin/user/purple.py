@@ -86,7 +86,6 @@ import configobj
 import datetime
 import json
 import logging
-import os
 import requests
 import sys
 import threading
@@ -95,10 +94,9 @@ import time
 from dateutil import tz
 from dateutil.parser import parse
 
-from dataclasses import dataclass, field
-from typing import Any, Dict, IO, Iterator, List, Optional, Tuple
+from dataclasses import dataclass
+from typing import Any, Dict, List
 
-import weedb
 import weewx
 import weeutil.weeutil
 
@@ -247,7 +245,6 @@ def datetime_from_reading(dt_str):
     return parse(dt_str, tzinfos=tzinfos)
 
 def utc_now():
-    tzinfos = {'CST': tz.gettz("UTC")}
     return datetime.datetime.now(tz=tz.gettz("UTC"))
 
 def get_concentrations(cfg: Configuration):
@@ -637,7 +634,7 @@ class Purple(StdService):
             log.debug('get-earliest-timestamp: r: %s' % r)
             if r is None:
                 log.debug('get-earliest-timestamp: request returned None')
-                return Non
+                return None
             j = r.json()
             log.debug('get_earliest_timestamp: returning earliest timestamp %s for %s.' % (j['timestamp'], hostname))
             return j['timestamp']
@@ -653,7 +650,6 @@ class Purple(StdService):
         new_records = 0
 
         hostname = None
-        proxy = None
         timeout = None
 
         checkpoint_ts = since_ts
@@ -730,7 +726,7 @@ class Purple(StdService):
                 log.error("get_data returned None.  No record to save.  %r" % now)
             if data is not None:
                 self.save_data(data)
-        except Exception as e:
+        except Exception:
             # Include a stack traceback in the log:
             # but eat this exception as we don't want to bring down weewx
             # because the PurpleAir sensor is unavailable.
@@ -791,7 +787,6 @@ if __name__ == "__main__":
 
     def main():
         import optparse
-        import weecfg
         parser = optparse.OptionParser(usage=usage)
         parser.add_option('--config', dest='cfgfn', type=str, metavar="FILE",
                           help="Use configuration file FILE. Default is /etc/weewx/weewx.conf or /home/weewx/weewx.conf")
