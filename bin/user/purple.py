@@ -50,11 +50,11 @@ WEEWX_PURPLE_VERSION = "2.0.b1"
 
 if sys.version_info[0] < 3 or (sys.version_info[0] == 3 and sys.version_info[1] < 7):
     raise weewx.UnsupportedFeature(
-        "weewx-loopdata requires Python 3.7 or later, found %s.%s" % (sys.version_info[0], sys.version_info[1]))
+        "weewx-purple requires Python 3.7 or later, found %s.%s" % (sys.version_info[0], sys.version_info[1]))
 
 if weewx.__version__ < "4":
     raise weewx.UnsupportedFeature(
-        "WeeWX 4 is required, found %s" % weewx.__version__)
+        "weewx-purple requires WeeWX 4, found %s" % weewx.__version__)
 
 # Set up observation types not in weewx.units
 
