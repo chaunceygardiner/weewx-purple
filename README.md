@@ -43,7 +43,7 @@ rather crude and has only been tested on Debian.  If in doubt, just skip
 purple-proxy and query the PuroleAir devices directly.
 
 See `weewx-purple` and `purple-proxy` in action on the following pages:
-* [Weatherbaord(TM) Report](https://www.paloaltoweather.com/weatherboard/)
+* [Weatherboard&trade; Report](https://www.paloaltoweather.com/weatherboard/)
 * [LiveSeasons Report](https://www.paloaltoweather.com/index.html).
 
 # Installation Instructions
