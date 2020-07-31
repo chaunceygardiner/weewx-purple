@@ -9,18 +9,24 @@ from the PurpleAir sensor or from a
 
 Copyright (C)2020 by John A Kline (john@johnkline.com)
 
-**This plugin requires Python 3.7, WeeWX 4 and the new schema in WeeWX 4**
+**This plugin requires Python 3.7, WeeWX 4 and the
+[wview_extended](https://github.com/weewx/weewx/blob/master/bin/schemas/wview_extended.py)
+schema**
 
-weewx-purple requires the new database schema in WeeWX 4 that contains
-pm1_0, pm2_5 and pm10_0 fields.  Loop record fields pm1_0, pm2_5 and
-pm10_0 correspond to PurpleAir's pm1_0_cf_1, pm2_5_cf_1 and pm10_cf_1 fields.
+weewx-purple requires the
+[wview_extended](https://github.com/weewx/weewx/blob/master/bin/schemas/wview_extended.py)
+in WeeWX 4 that contains pm1_0, pm2_5 and pm10_0 columns.  With the weewx-purple
+extension, Loop records will be populated with pm1_0, pm2_5 and pm10_0 fields that
+correspond to PurpleAir's pm1_0_cf_1, pm2_5_cf_1 and pm10_cf_1 fields.
 
 In addition to pm1_0, pm2_5 and pm10_0, AQI variables are also available
-(even though they are not in the database) via WeeWX 4's xtypes.
+(even though they are not in the database) via WeeWX 4's
+[XTypes](https://github.com/weewx/weewx/wiki/WeeWX-V4-user-defined-types).
 pm2_5_aqi is automatically computed from pm2_5 and can be used in reports
-($current.pm2_5_aqi) and in graphs [[[[pm2_5_aqi]]].  Also available is
-pm2_5_aqi_color which is an rgbint (useful for displaying AQI in the
-appropriate color (e.g., green for AQIs <= 50).
+(`$current.pm2_5_aqi`) and in graphs `[[[[pm2_5_aqi]]]`.  Also available is
+is the [RGBint](https://www.shodor.org/stella2java/rgbint.html) value
+`pm2_5_aqi_color` (useful for displaying AQI in the appropriate color
+(e.g., green for AQIs <= 50).
 
 If the sensor is an outdoor sensor, the fields inserted are the averages
 of the two sensors.
@@ -30,9 +36,9 @@ longer the case.
 
 ### What's a purple proxy?
 
-It is advantageous to query `purlpe-proxy` for readings.  `purple-proxy`
+purple-proxy is optional when using weewx-purple.  purple-proxy
 returns an average over the archive period when queried.  Use of purple-proxy
-is not recommended unless the user in Unis/Linux savy.  The install is
+is not recommended unless the user is Unix/Linux savy.  The install is
 rather crude and has only been tested on Debian.  If in doubt, just skip
 purple-proxy and query the PuroleAir devices directly.
 
