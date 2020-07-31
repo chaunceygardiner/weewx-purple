@@ -22,7 +22,7 @@ def loader():
 class PurpleInstaller(ExtensionInstaller):
     def __init__(self):
         super(PurpleInstaller, self).__init__(
-            version="1.0",
+            version="2.0.b1",
             name='purple',
             description='Record air quality via purple-proxy service.',
             author="John A Kline",
@@ -30,7 +30,6 @@ class PurpleInstaller(ExtensionInstaller):
             data_services='user.purple.Purple',
             config={
                 'Purple': {
-                    'data_binding'   : 'purple_binding',
                     'Proxy1'   : {
                         'enable'         : False,
                         'hostname'       : 'proxy1',
@@ -68,16 +67,6 @@ class PurpleInstaller(ExtensionInstaller):
                         'timeout'    : '15',
                     },
                 },
-                'DataBindings': {
-                    'purple_binding': {
-                        'manager': 'weewx.manager.DaySummaryManager',
-                        'schema': 'user.purple.schema',
-                        'table_name': 'archive',
-                        'database': 'purple_sqlite'}},
-                'Databases': {
-                    'purple_sqlite': {
-                        'database_name': 'purple.sdb',
-                        'driver': 'weedb.sqlite'}},
             },
             files=[('bin/user', ['bin/user/purple.py']), ]
             )

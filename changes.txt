@@ -1,0 +1,14 @@
+weewx-purple change history
+---------------------------
+
+2.0.b1 07/31/2020
+-----------------
+1. 2.x drops the separate purple database in favor of WeeWX 4's
+   new schema that includes air quality fields.  WeeWX 4's
+   xtypes feature is used to compute AQI from pm2_5.  This
+   works for all cases, including graphing by imagegenerator.
+
+
+1.0 01/18/2020
+--------------
+Initial release of weewx-purple.

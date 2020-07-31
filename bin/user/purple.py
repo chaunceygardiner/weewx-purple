@@ -14,75 +14,10 @@
 # along with this program; if not, write to the Free Software
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 
-"""weewx module that records PurpleAir air quality sensor readings via the purple-proxy service.
-
-Loosely modeled after Kenneth Baker's weewx-purpleair WeeWX plugin.
-
-Installation instructions.
-
-1. cd to the directory where this extension was cloned from github, for example:
-   cd ~/software/weewx-purple
-
-2. Run the following command.
-
-   sudo /home/weewx/bin/wee_extension --install .
-
-    Note: The above command assumes a WeeWX installation of `/home/weewx`.
-          Adjust the command as necessary.
-
-3. Edit the `Purple` section of weewx.conf (which was created by the install
-   above.
-
-
-   [Purple]
-       data_binding = purple_binding
-       [[Sensor1]]
-           enable = true
-           hostname = purple-air
-           port = 80
-           timeout = 15
-       [[Sensor2]]
-           enable = false
-           hostname = purple-air2
-           port = 80
-           timeout = 15
-       [[Proxy1]]
-           enable = false
-           hostname = proxy1
-           port = 8000
-           timeout = 5
-       [[Proxy2]]
-           enable = false
-           hostname = proxy2
-           port = 8000
-           timeout = 5
-       [[Proxy3]]
-           enable = false
-           hostname = proxy3
-           port = 8000
-           timeout = 5
-       [[Proxy4]]
-           enable = false
-           hostname = proxy4
-           port = 8000
-           timeout = 5
-
-   [DataBindings]
-       [[purple_binding]]
-           manager = weewx.manager.DaySummaryManager
-           schema = user.purple.schema
-           table_name = archive
-           database = purple_sqlite
-
-   [Databases]
-       [[purple_sqlite]]
-           database_name = purple.sdb
-           database_type = SQLite
-
+"""
+WeeWX module that records PurpleAir air quality sensor readings.
 """
 
-import calendar
-import configobj
 import datetime
 import json
 import logging
@@ -97,19 +32,21 @@ from dateutil.parser import parse
 from dataclasses import dataclass
 from typing import Any, Dict, List
 
-import weewx
 import weeutil.weeutil
+import weewx
+import weewx.units
+import weewx.xtypes
 
+from weewx.units import ValueTuple
 from weeutil.weeutil import timestamp_to_string
 from weeutil.weeutil import to_bool
 from weeutil.weeutil import to_float
 from weeutil.weeutil import to_int
 from weewx.engine import StdService
-import weewx.units
 
 log = logging.getLogger(__name__)
 
-WEEWX_PURPLE_VERSION = "1.0"
+WEEWX_PURPLE_VERSION = "2.0.b1"
 
 if sys.version_info[0] < 3 or (sys.version_info[0] == 3 and sys.version_info[1] < 7):
     raise weewx.UnsupportedFeature(
@@ -125,82 +62,18 @@ weewx.units.USUnits['air_quality_index']       = 'aqi'
 weewx.units.MetricUnits['air_quality_index']   = 'aqi'
 weewx.units.MetricWXUnits['air_quality_index'] = 'aqi'
 
-weewx.units.USUnits['air_quality_color']       = 'aqic'
-weewx.units.MetricUnits['air_quality_color']   = 'aqic'
-weewx.units.MetricWXUnits['air_quality_color'] = 'aqic'
+weewx.units.USUnits['air_quality_color']       = 'aqi_color'
+weewx.units.MetricUnits['air_quality_color']   = 'aqi_color'
+weewx.units.MetricWXUnits['air_quality_color'] = 'aqi_color'
 
-weewx.units.default_unit_label_dict['aqi']  = ' AQI'
-weewx.units.default_unit_label_dict['aqic'] = ' RGB'
+weewx.units.default_unit_label_dict['pm2_5_aqi']  = ' AQI'
+weewx.units.default_unit_label_dict['pm2_5_aqi_color'] = ' RGB'
 
 weewx.units.default_unit_format_dict['aqi']  = '%d'
-weewx.units.default_unit_format_dict['aqic'] = '%d'
-
-# assign types of units to specific measurements
-weewx.units.obs_group_dict['purple_temperature'] = 'group_temperature'
-weewx.units.obs_group_dict['purple_humidity'] = 'group_percent'
-weewx.units.obs_group_dict['purple_pressure'] = 'group_pressure'
-weewx.units.obs_group_dict['pm1_0_cf_1'] = 'group_concentration'
-weewx.units.obs_group_dict['pm1_0_cf_1_b'] = 'group_concentration'
-weewx.units.obs_group_dict['pm1_0_cf_1_avg'] = 'group_concentration'
-weewx.units.obs_group_dict['pm1_0_atm'] = 'group_concentration'
-weewx.units.obs_group_dict['pm1_0_atm_b'] = 'group_concentration'
-weewx.units.obs_group_dict['pm1_0_atm_avg'] = 'group_concentration'
-weewx.units.obs_group_dict['pm2_5_cf_1'] = 'group_concentration'
-weewx.units.obs_group_dict['pm2_5_cf_1_b'] = 'group_concentration'
-weewx.units.obs_group_dict['pm2_5_cf_1_avg'] = 'group_concentration'
-weewx.units.obs_group_dict['pm2_5_atm'] = 'group_concentration'
-weewx.units.obs_group_dict['pm2_5_atm_b'] = 'group_concentration'
-weewx.units.obs_group_dict['pm2_5_atm_avg'] = 'group_concentration'
-weewx.units.obs_group_dict['pm10_0_cf_1'] = 'group_concentration'
-weewx.units.obs_group_dict['pm10_0_cf_1_b'] = 'group_concentration'
-weewx.units.obs_group_dict['pm10_0_cf_1_avg'] = 'group_concentration'
-weewx.units.obs_group_dict['pm10_0_atm'] = 'group_concentration'
-weewx.units.obs_group_dict['pm10_0_atm_b'] = 'group_concentration'
-weewx.units.obs_group_dict['pm10_0_atm_avg'] = 'group_concentration'
+weewx.units.default_unit_format_dict['aqi_color'] = '%d'
 
 weewx.units.obs_group_dict['pm2_5_aqi'] = 'air_quality_index'
-weewx.units.obs_group_dict['pm2_5_aqi_b'] = 'air_quality_index'
-weewx.units.obs_group_dict['pm2_5_aqi_avg'] = 'air_quality_index'
-
-weewx.units.obs_group_dict['pm2_5_aqic'] = 'air_quality_color'
-weewx.units.obs_group_dict['pm2_5_aqic_b'] = 'air_quality_color'
-weewx.units.obs_group_dict['pm2_5_aqic_avg'] = 'air_quality_color'
-
-# Schema for purple database (purple.sdb).  Note: this separate database
-# may disappear in favor of adding fields to weewx.sdb.
-schema = [
-    ('dateTime', 'INTEGER NOT NULL PRIMARY KEY'),
-    ('usUnits', 'INTEGER NOT NULL'),
-    ('interval', 'INTEGER NOT NULL'),
-    ('purple_temperature','REAL'),
-    ('purple_humidity','REAL'),
-    ('purple_dewpoint','REAL'),
-    ('purple_pressure','REAL'),
-    ('pm1_0_cf_1','REAL'),
-    ('pm1_0_cf_1_b','REAL'),
-    ('pm1_0_cf_1_avg','REAL'),
-    ('pm1_0_atm','REAL'),
-    ('pm1_0_atm_b','REAL'),
-    ('pm1_0_atm_avg','REAL'),
-    ('pm2_5_cf_1','REAL'),
-    ('pm2_5_cf_1_b','REAL'),
-    ('pm2_5_cf_1_avg','REAL'),
-    ('pm2_5_atm','REAL'),
-    ('pm2_5_atm_b','REAL'),
-    ('pm2_5_atm_avg','REAL'),
-    ('pm10_0_cf_1','REAL'),
-    ('pm10_0_cf_1_b','REAL'),
-    ('pm10_0_cf_1_avg','REAL'),
-    ('pm10_0_atm','REAL'),
-    ('pm10_0_atm_b','REAL'),
-    ('pm10_0_atm_avg','REAL'),
-    ('pm2_5_aqi', 'INTEGER'),
-    ('pm2_5_aqi_b', 'INTEGER'),
-    ('pm2_5_aqi_avg', 'INTEGER'),
-    ('p25aqic', 'INTEGER'),
-    ('p25aqic_b', 'INTEGER'),
-    ('p25aqic_avg', 'INTEGER'),
-    ]
+weewx.units.obs_group_dict['pm2_5_aqi_color'] = 'air_quality_color'
 
 class Source:
     def __init__(self, config_dict, name, is_proxy):
@@ -216,19 +89,11 @@ class Source:
         self.timeout  = to_int(source_dict.get('timeout', 10))
 
 @dataclass
-class Rgb:
-    red  : int
-    green: int
-    blue :  int
-
-@dataclass
 class Concentrations:
     timestamp: float
     pm1_0     : float
     pm2_5     : float
     pm10_0    : float
-    pm2_5_aqi : int
-    pm2_5_aqic: Rgb
 
 @dataclass
 class Configuration:
@@ -268,8 +133,6 @@ def get_concentrations(cfg: Configuration):
                     pm1_0      = to_float(record['pm1_0_cf_1']),
                     pm2_5      = to_float(record['pm2_5_cf_1']),
                     pm10_0     = to_float(record['pm10_0_cf_1']),
-                    pm2_5_aqi  = to_int(record['pm2_5_aqi']),
-                    pm2_5_aqic = int_to_rgb(record['p25aqic'])
                 )
                 # If there is a 'b' sensor, add it in and average the readings
                 log.debug('get_concentrations: concentrations BEFORE averaing in b reading: %s' % concentrations)
@@ -277,23 +140,10 @@ def get_concentrations(cfg: Configuration):
                     concentrations.pm1_0      = (concentrations.pm1_0  + to_float(record['pm1_0_cf_1_b'])) / 2.0
                     concentrations.pm2_5      = (concentrations.pm2_5  + to_float(record['pm2_5_cf_1_b'])) / 2.0
                     concentrations.pm10_0     = (concentrations.pm10_0 + to_float(record['pm10_0_cf_1_b'])) / 2.0
-                    concentrations.pm2_5_aqi  = (concentrations.pm2_5_aqi    + to_float(record['pm2_5_aqi'])) / 2.0
-                    concentrations.pm2_5_aqic = average_rgbs(concentrations.pm2_5_aqic, int_to_rgb(record['p25aqic_b']))
                 log.debug('get_concentrations: concentrations: %s' % concentrations)
                 return concentrations
     log.error('Could not get concentrations from any source.')
     return None
-
-def rgb_to_int(rgb: Rgb) -> int:
-    return (rgb.red << 16) + (rgb.green << 8) + rgb.blue
-
-def int_to_rgb(i: int) -> Rgb:
-    return Rgb(i >> 16, (i & 0x00FF00) >> 8, i & 0xFF)
-
-def average_rgbs(rgb1: Rgb, rgb2: Rgb) -> Rgb:
-    return Rgb(int((rgb1.red   + rgb2.red   + 0.5) / 2),
-               int((rgb1.green + rgb2.green + 0.5) / 2),
-               int((rgb1.blue  + rgb2.blue  + 0.5) / 2))
 
 def is_type(j: Dict[str, Any], t, names: List[str]) -> bool:
     try:
@@ -420,42 +270,7 @@ def populate_record(ts, j):
             record[key_b] = j[key_b]
             record[key + '_avg'] = (j[key] + j[key_b]) / 2.0
 
-    # grab AQI for A, B and the average of the A and B channels and push into the record
-    key = 'pm2.5_aqi'
-    record['pm2_5_aqi'] = j[key]
-    key_b = key + '_b'
-    if key_b in j.keys():
-        record['pm2_5_aqi_b'] = j[key_b]
-        record['pm2_5_aqi_avg'] = int((j['pm2.5_aqi'] + j[key_b]) / 2 + 0.5)
-
-    # grap AQIC (rgb value representing AQI) for A, B and average
-    key = 'p25aqic'
-    rgb = rgb_convert_to_tuple(j[key])
-    record['p25aqic'] = convert_rgb_tuple_to_int(rgb)
-    key_b = key + '_b'
-    if key_b in j.keys():
-        rgb_b = rgb_convert_to_tuple(j[key_b])
-        rgb_avg = (
-            int((rgb[0] + rgb_b[0]) / 2 + 0.5),
-            int((rgb[1] + rgb_b[1]) / 2 + 0.5),
-            int((rgb[2] + rgb_b[2]) / 2 + 0.5))
-        record['p25aqic_b'] = convert_rgb_tuple_to_int(rgb_b)
-        record['p25aqic_avg'] = convert_rgb_tuple_to_int(rgb_avg)
-
     return record
-
-def rgb_convert_to_tuple(rgb_string):
-    # rgb(61,234,0)
-    rgb_string = rgb_string.replace('rgb(', '')
-    # 61,234,0)
-    rgb_string = rgb_string.replace(')', '')
-    # 61,234,0
-    rgbs = rgb_string.split(',')
-    # [61, 234, 0]
-    return int(rgbs[0]), int(rgbs[1]), int(rgbs[2])
-
-def convert_rgb_tuple_to_int(rgb_tuple):
-    return (rgb_tuple[0]<<16) + (rgb_tuple[1]<<8) + rgb_tuple[2]
 
 class Purple(StdService):
     """Collect Purple Air air quality measurements."""
@@ -466,14 +281,6 @@ class Purple(StdService):
 
         self.engine = engine
         self.config_dict = config_dict.get('Purple', {})
-
-        # get the database parameters we need to function
-        self.data_binding = self.config_dict.get('data_binding', 'purple_binding')
-
-        self.dbm_dict = weewx.manager.get_manager_dict(
-            config_dict['DataBindings'],
-            config_dict['Databases'],
-            self.data_binding)
 
         self.cfg = Configuration(
             lock             = threading.Lock(),
@@ -496,6 +303,8 @@ class Purple(StdService):
         if source_count == 0:
             log.error('No sources configured for purple extension.  Purple extension is inoperable.')
         else:
+            weewx.xtypes.xtypes.append(AQI())
+
             # Start a thread to query proxies and make aqi available to loopdata
             dp: DevicePoller = DevicePoller(self.cfg)
             t: threading.Thread = threading.Thread(target=dp.poll_device)
@@ -503,13 +312,7 @@ class Purple(StdService):
             t.setDaemon(True)
             t.start()
 
-            self.bind(weewx.STARTUP, self._catchup)
             self.bind(weewx.NEW_LOOP_PACKET, self.new_loop_packet)
-            self.bind(weewx.NEW_ARCHIVE_RECORD, self.new_archive_record)
-            self.bind(weewx.END_ARCHIVE_PERIOD, self.end_archive_period)
-
-    def new_archive_record(self, event):
-        log.debug('new_archive_record: %s' % event)
 
     def new_loop_packet(self, event):
         log.debug('new_loop_packet(%s)' % event)
@@ -523,8 +326,8 @@ class Purple(StdService):
                 event.packet['pm1_0'] = self.cfg.concentrations.pm1_0
                 event.packet['pm2_5'] = self.cfg.concentrations.pm2_5
                 event.packet['pm10_0'] = self.cfg.concentrations.pm10_0
-                event.packet['pm2_5_aqi'] = self.cfg.concentrations.pm2_5_aqi
-                event.packet['pm2_5_aqic'] = rgb_to_int(self.cfg.concentrations.pm2_5_aqic)
+                event.packet['pm2_5_aqi'] = AQI.compute_pm2_5_aqi(event.packet['pm2_5'])
+                event.packet['pm2_5_aqi_color'] = AQI.compute_pm2_5_aqi_color(event.packet['pm2_5_aqi'])
                 log.debug('Time of reading being inserted: %s' % timestamp_to_string(self.cfg.concentrations.timestamp))
                 log.debug('Inserted packet[pm1_0]: %f into packet.' % self.cfg.concentrations.pm1_0)
                 log.debug('Inserted packet[pm2_5]: %f into packet.' % self.cfg.concentrations.pm2_5)
@@ -554,49 +357,6 @@ class Purple(StdService):
                 break
 
         return sources
-
-    def _catchup(self, _event):
-        """Pull any unarchived records off the purple-proxy service and archive them.
-        """
-
-        dbmanager = self.engine.db_binder.get_manager(data_binding=self.data_binding, initialize=True)
-        log.info("Using binding '%s' to database '%s'" % (self.data_binding, dbmanager.database_name))
-
-        dbcol = dbmanager.connection.columnsOf(dbmanager.table_name)
-        memcol = [x[0] for x in self.dbm_dict['schema']]
-        if dbcol != memcol:
-            raise Exception('purple schema mismatch: %s != %s' % (dbcol, memcol))
-
-        # Make sure the daily summaries have not been partially updated
-        if dbmanager._read_metadata('lastWeightPatch'):
-            raise weewx.ViolatedPrecondition("Update of daily summary for database '%s' not complete. "
-                                             "Finish the update first." % dbmanager.database_name)
-
-        # Back fill the daily summaries.
-        _nrecs, _ndays = dbmanager.backfill_day_summary()
-
-        # Do a catch up on any data in the purple-proxy service archive, but not yet put in the database.
-
-        # Find out when the database was last updated.
-        lastgood_ts = dbmanager.lastGoodStamp()
-        if lastgood_ts == None:
-            log.info('New purple database.  Will add all records stored in purple-proxy service (if running).')
-            lastgood_ts = 0
-
-        try:
-            # Now ask for any new records since then.  Reject any records that
-            # have a timestamp in the future, but provide some lenience for
-            # clock drift.
-            for record in self.genStartupRecords(lastgood_ts):
-                ts = record.get('dateTime')
-                if ts and ts < time.time() + self.cfg.archive_delay:
-                    log.debug('__init__: saving record(%s): %r.' % (timestamp_to_string(record['dateTime']), record))
-                    self.save_data(record)
-                else:
-                    log.warning("ignore historical record: %s" % record)
-        except Exception as e:
-            log.error('**** Exception attempting to read archive records: %s' % e)
-            weeutil.logger.log_traceback(log.critical, "    ****  ")
 
     def get_proxy_version(hostname, port, timeout):
         try:
@@ -642,123 +402,6 @@ class Purple(StdService):
             log.debug('Could not get earliest timestamp from proxy %s: %s.  Down?' % (hostname, e))
             return None
 
-    def genStartupRecords(self, since_ts):
-        """Return arehive records since_ts.
-        """
-        log.debug('genStartupRecords: since_ts=%r' % since_ts)
-        log.info('Downloading new records (if any).')
-        new_records = 0
-
-        hostname = None
-        timeout = None
-
-        checkpoint_ts = since_ts
-        for source in self.cfg.sources:
-            log.debug('genStartupRecords: source.enable: %s, source.hostname: %s, source.port: %d, source.timeout: %d'
-                % (source.enable, source.hostname, source.port, source.timeout))
-            if source.is_proxy:
-                if source.enable:
-                    version= Purple.get_proxy_version(source.hostname,
-                        source.port, source.timeout)
-                    log.debug('genStartupRecords: version: %s' % version)
-                    if version is not None:
-                        hostname = source.hostname
-                        port     = source.port
-                        timeout  = source.timeout
-                        try:
-                            fetch_count = None
-                            while True:
-                                # Fetch 300 at a time
-                                # Stop when 0 records returned
-                                if fetch_count is None:
-                                    fetch_count = 0
-                                elif fetch_count == 0:
-                                    log.debug('Done fetching.')
-                                    break
-                                else:
-                                    log.debug('Last select fetched: %d records' % fetch_count)
-                                fetch_count = 0
-                                url = 'http://%s:%s/fetch-archive-records?since_ts=%d,limit=300' % (
-                                    hostname, port, checkpoint_ts)
-                                log.debug('genStartupRecords: url: %s' % url)
-                                r = requests.get(url=url, timeout=timeout)
-                                r.raise_for_status()
-                                log.debug('genStartupRecords: %s returned %r' % (url, r))
-                                if r:
-                                    # convert to json
-                                    j = r.json()
-                                    log.debug('genStartupRecords: ...the json is: %r' % j)
-                                    for reading in j:
-                                        fetch_count += 1
-                                        log.debug('reading: %r' % reading)
-                                        # Get time_of_reading
-                                        time_of_reading = datetime_from_reading(reading['DateTime'])
-                                        log.debug('genStartupRecords: examining reading: %s (%s).' % (reading['DateTime'], time_of_reading))
-                                        reading_ts = calendar.timegm(time_of_reading.utctimetuple())
-                                        log.debug('genStartupRecords: reading_ts: %s.' % timestamp_to_string(reading_ts))
-                                        reading_ts = int(reading_ts / 60) * 60 # zero out the seconds
-                                        log.debug('genStartupRecords: rounded reading_ts: %s.' % timestamp_to_string(reading_ts))
-                                        if reading_ts > checkpoint_ts:
-                                            checkpoint_ts = reading_ts
-                                            # create a record
-                                            pkt = populate_record(reading_ts, reading)
-                                            pkt['interval'] = self.cfg.archive_interval / 60
-                                            log.debug('genStartupRecords: pkt(%s): %r.' % (timestamp_to_string(pkt['dateTime']), pkt))
-                                            log.debug('packet: %s' % pkt)
-                                            log.debug('genStartupRecords: added record: %s' % time_of_reading)
-                                            new_records += 1
-                                            yield pkt
-                            log.info('Downloaded %d new records.' % new_records)
-                            return
-                        except Exception as e:
-                            log.info('gen_startup_records: Attempt to fetch from: %s failed.: %s' % (hostname, e))
-                            weeutil.logger.log_traceback(log.error, "    ****  ")
-
-        log.info('No proxy from which to fetch PurpleAir records.')
-        return
-
-    def end_archive_period(self, _event):
-        """create a new archive record and save it to the database"""
-        try:
-            now = int(time.time() + 0.5)
-            data = self.get_data(now)
-            if data is None:
-                log.error("get_data returned None.  No record to save.  %r" % now)
-            if data is not None:
-                self.save_data(data)
-        except Exception:
-            # Include a stack traceback in the log:
-            # but eat this exception as we don't want to bring down weewx
-            # because the PurpleAir sensor is unavailable.
-            weeutil.logger.log_traceback(log.critical, "    ****  ")
-
-    def save_data(self, record):
-        """save data to database"""
-        dbmanager = self.engine.db_binder.get_manager(self.data_binding)
-        dbmanager.addRecord(record)
-
-    def get_data(self, now_ts):
-        for source in self.cfg.sources:
-            if source.enable:
-                record = collect_data(source.hostname,
-                                      source.port,
-                                      source.timeout,
-                                      self.cfg.archive_interval,
-                                      source.is_proxy)
-                if record is not None:
-                    break
-
-        if record is None:
-            return None
-
-        # Align timestamp to archive interval
-        now_ts = int(time.time() + 0.5)
-        record['dateTime'] = int(now_ts / self.cfg.archive_interval) * self.cfg.archive_interval
-
-        # Archive interval is expressed in minutes in the archive record.
-        record['interval'] = self.cfg.archive_interval / 60
-        return record
-
 class DevicePoller:
     def __init__(self, cfg: Configuration):
         self.cfg = cfg
@@ -780,6 +423,207 @@ class DevicePoller:
             log.debug('poll_device: Sleeping for %d seconds.' % self.cfg.poll_interval)
             time.sleep(self.cfg.poll_interval)
 
+class AQI(weewx.xtypes.XType):
+    """
+    AQI XType which computes the AQI (air quality index) from
+    the pm2_5 value.
+    """
+
+    def __init__(self):
+        pass
+
+    agg_sql_dict = {
+        'avg': "SELECT AVG(pm2_5), usUnits FROM %(table_name)s "
+               "WHERE dateTime > %(start)s AND dateTime <= %(stop)s AND pm2_5 IS NOT NULL",
+        'count': "SELECT COUNT(dateTime), usUnits FROM %(table_name)s "
+                 "WHERE dateTime > %(start)s AND dateTime <= %(stop)s AND pm2_5 IS NOT NULL",
+        'first': "SELECT pm2_5, usUnits FROM %(table_name)s "
+                 "WHERE dateTime = (SELECT MIN(dateTime) FROM %(table_name)s "
+                 "WHERE dateTime > %(start)s AND dateTime <= %(stop)s AND pm2_5 IS NOT NULL",
+        'last': "SELECT pm2_5, usUnits FROM %(table_name)s "
+                "WHERE dateTime = (SELECT MAX(dateTime) FROM %(table_name)s "
+                "WHERE dateTime > %(start)s AND dateTime <= %(stop)s AND pm2_5 IS NOT NULL",
+        'min': "SELECT pm2_5, usUnits FROM %(table_name)s "
+               "WHERE dateTime > %(start)s AND dateTime <= %(stop)s AND pm2_5 IS NOT NULL "
+               "ORDER BY pm2_5 ASC LIMIT 1;",
+        'max': "SELECT pm2_5, usUnits FROM %(table_name)s "
+               "WHERE dateTime > %(start)s AND dateTime <= %(stop)s AND pm2_5 IS NOT NULL "
+               "ORDER BY pm2_5 DESC LIMIT 1;",
+        'sum': "SELECT SUM(pm2_5), usUnits FROM %(table_name)s "
+               "WHERE dateTime > %(start)s AND dateTime <= %(stop)s AND pm2_5 IS NOT NULL)",
+    }
+
+    @staticmethod
+    def compute_pm2_5_aqi(pm2_5):
+        #             U.S. EPA PM2.5 AQI
+        #
+        #  AQI Category  AQI Value  24-hr PM2.5
+        # Good             0 -  50    0.0 -  12.0
+        # Moderate        50 - 100   12.0 -  35.4
+        # USG            100 - 150   35.4 -  55.4
+        # Unhealthy      150 - 200   55.4 - 150.4
+        # Very Unhealthy 200 - 300  150.4 - 250.4
+        # Hazardous      300 - 400  250.4 - 350.4
+        # Hazardous      400 - 500  350.4 - 500.0
+        if pm2_5 <= 12.0: # Good
+            return pm2_5 / 12.0 * 50
+        elif pm2_5 <= 35.4: # Moderate
+            return (pm2_5 - 12.0) / 23.4 * 50.0 + 50.0
+        elif pm2_5 <= 55.4: # Unhealthy for senstive
+            return (pm2_5 - 35.4) / 20.0 * 50.0 + 100.0
+        elif pm2_5 <= 150.4: # Unhealthy
+            return (pm2_5 - 55.4) / 95.0 * 50.0 + 150.0
+        elif pm2_5 <= 250.4: # Very Unhealthy
+            return (pm2_5 - 150.4) / 100.0 * 100.0 + 200.0
+        elif pm2_5 <= 350.4: # Hazardous
+            return (pm2_5 - 250.4) / 100.0 * 100.0 + 300.0
+        else: # Hazardous
+            return (pm2_5 - 350.4) / 149.6 * 100.0 + 400.0
+
+    @staticmethod
+    def compute_pm2_5_aqi_color(pm2_5_aqi):
+        if pm2_5_aqi <= 50:
+            return 255 << 8                 # Green
+        elif pm2_5_aqi <= 100:
+            return (255 << 16) + (255 << 8) # Yellow
+        elif pm2_5_aqi <=  150:
+            return (255 << 16) + (165 << 8) # Orange
+        elif pm2_5_aqi <= 200: 
+            return 255 << 16                # Red
+        elif pm2_5_aqi <= 300:
+            return (128 << 16) + 128        # Purple
+        else:
+            return 128 << 16                # Maroon
+
+    @staticmethod
+    def get_scalar(obs_type, record, db_manager=None):
+        log.debug('get_scalar(%s)' % obs_type)
+        if obs_type not in [ 'pm2_5_aqi', 'pm2_5_aqi_color' ]:
+            raise weewx.UnknownType(obs_type)
+        log.debug('get_scalar(%s)' % obs_type)
+        try:
+            pm2_5 = record['pm2_5']
+            value = AQI.compute_pm2_5_aqi(pm2_5)
+            if obs_type == 'pm2_5_color':
+                value = AQI.compute_pm2_5_aqi_color(value)
+            t, g = weewx.units.getStandardUnitType(record['usUnits'], obs_type)
+            # Form the ValueTuple and return it:
+            return weewx.units.ValueTuple(value, t, g)
+        except KeyError:
+            # Don't have everything we need. Raise an exception.
+            raise weewx.CannotCalculate(obs_type)
+
+    @staticmethod
+    def get_series(obs_type, timespan, db_manager, aggregate_type=None, aggregate_interval=None):
+        """Get a series, possibly with aggregation.
+        """
+
+        if obs_type not in [ 'pm2_5_aqi', 'pm2_5_aqi_color' ]:
+            raise weewx.UnknownType(obs_type)
+
+        log.debug('get_series(%s, %s, %s, aggregate:%s, aggregate_interval:%s)' % (
+            obs_type, timestamp_to_string(timespan.start), timestamp_to_string(
+            timespan.stop), aggregate_type, aggregate_interval))
+
+        #  Prepare the lists that will hold the final results.
+        start_vec = list()
+        stop_vec = list()
+        data_vec = list()
+
+        # Is aggregation requested?
+        if aggregate_type:
+            # Yes. Just use the regular series function.
+            return weewx.xtypes.ArchiveTable.get_series(obs_type, timespan, db_manager, aggregate_type,
+                                           aggregate_interval)
+        else:
+            # No aggregation.
+            sql_str = 'SELECT dateTime, usUnits, interval, pm2_5 FROM %s ' \
+                      'WHERE dateTime >= ? AND dateTime <= ? AND pm2_5 IS NOT NULL' \
+                      % db_manager.table_name
+            std_unit_system = None
+
+            for record in db_manager.genSql(sql_str, timespan):
+                ts, unit_system, interval, pm2_5 = record
+                if std_unit_system:
+                    if std_unit_system != unit_system:
+                        raise weewx.UnsupportedFeature(
+                            "Unit type cannot change within a time interval.")
+                else:
+                    std_unit_system = unit_system
+
+                value = AQI.compute_pm2_5_aqi(pm2_5)
+                if obs_type == 'pm2_5_color':
+                    value = AQI.compute_pm2_5_aqi_color(value)
+                log.debug('get_series(%s): %s - %s - %s' % (obs_type,
+                    timestamp_to_string(ts - interval * 60),
+                    timestamp_to_string(ts), value))
+                start_vec.append(ts - interval * 60)
+                stop_vec.append(ts)
+                data_vec.append(value)
+
+            unit, unit_group = weewx.units.getStandardUnitType(std_unit_system, obs_type,
+                                                               aggregate_type)
+
+        return (ValueTuple(start_vec, 'unix_epoch', 'group_time'),
+                ValueTuple(stop_vec, 'unix_epoch', 'group_time'),
+                ValueTuple(data_vec, unit, unit_group))
+
+    @staticmethod
+    def get_aggregate(obs_type, timespan, aggregate_type, db_manager, **option_dict):
+        """Returns an aggregation of pm2_5_aqi over a timespan by using the main archive
+        table.
+
+        obs_type: Must be 'pm2_5_aqi' or 'pm2_5_aqi_color'.
+
+        timespan: An instance of weeutil.Timespan with the time period over which aggregation is to
+        be done.
+
+        aggregate_type: The type of aggregation to be done. For this function, must be 'avg',
+        'sum', 'count', 'first', 'last', 'min', or 'max'. Anything else will cause
+        weewx.UnknownAggregation to be raised.
+
+        db_manager: An instance of weewx.manager.Manager or subclass.
+
+        option_dict: Not used in this version.
+
+        returns: A ValueTuple containing the result.
+        """
+        if obs_type not in ['pm2_5_aqi', 'pm2_5_aqi_color']:
+            raise weewx.UnknownType(obs_type)
+
+        log.debug('get_aggregate(%s, %s, %s, aggregate:%s)' % (
+            obs_type, timestamp_to_string(timespan.start),
+            timestamp_to_string(timespan.stop), aggregate_type))
+
+        aggregate_type = aggregate_type.lower()
+
+        # Raise exception if we don't know about this type of aggregation
+        if aggregate_type not in list(AQI.agg_sql_dict.keys()):
+            raise weewx.UnknownAggregation(aggregate_type)
+
+        # Form the interpolation dictionary
+        interpolation_dict = {
+            'start': timespan.start,
+            'stop': timespan.stop,
+            'table_name': db_manager.table_name
+        }
+
+        select_stmt = AQI.agg_sql_dict[aggregate_type] % interpolation_dict
+        row = db_manager.getSql(select_stmt)
+        if row:
+            value, std_unit_system = row
+
+        if value is not None:
+            value = AQI.compute_pm2_5_aqi(value)
+            if obs_type == 'pm2_5_color':
+                value = AQI.compute_pm2_5_aqi_color(value)
+        t, g = weewx.units.getStandardUnitType(std_unit_system, obs_type, aggregate_type)
+        # Form the ValueTuple and return it:
+        log.debug('get_aggregate(%s, %s, %s, aggregate:%s, select_stmt: %s, returning %s)' % (
+            obs_type, timestamp_to_string(timespan.start), timestamp_to_string(timespan.stop),
+            aggregate_type, select_stmt, value))
+        return weewx.units.ValueTuple(value, t, g)
+
 if __name__ == "__main__":
     usage = """%prog [options] [--help] [--debug]"""
 
@@ -790,9 +634,6 @@ if __name__ == "__main__":
         parser = optparse.OptionParser(usage=usage)
         parser.add_option('--config', dest='cfgfn', type=str, metavar="FILE",
                           help="Use configuration file FILE. Default is /etc/weewx/weewx.conf or /home/weewx/weewx.conf")
-        parser.add_option('--binding', dest="binding", metavar="BINDING",
-                          default='purple_binding',
-                          help="The data binding to use. Default is 'purple_binding'.")
         parser.add_option('--test-collector', dest='tc', action='store_true',
                           help='test the data collector')
         parser.add_option('--test-is-sane', dest='sane_test', action='store_true',
@@ -802,8 +643,6 @@ if __name__ == "__main__":
         parser.add_option('--port', dest='port', action='store',
                           type=int, default=80,
                           help="port to use with --test-collector. Default is '80'")
-        parser.add_option('--test-service', dest='ts', action='store_true',
-                          help='test the service')
         (options, args) = parser.parse_args()
 
         weeutil.logger.setup('purple', {})
@@ -814,10 +653,6 @@ if __name__ == "__main__":
             test_collector(options.hostname, options.port)
         if options.sane_test:
             test_is_sane()
-        elif options.sane_test:
-            if not options.hostname:
-                parser.error('--test-service requires --hostname argument')
-            test_service(options.hostname, options.port)
 
     def test_collector(hostname, port):
         while True:
@@ -887,47 +722,4 @@ if __name__ == "__main__":
         j = json.loads(bad_2)
         assert(not is_sane(j))
 
-    def test_service(hostname, port):
-        from weewx.engine import StdEngine
-        from tempfile import NamedTemporaryFile
-
-        with NamedTemporaryFile() as temp_file:
-            config = configobj.ConfigObj({
-                'Station': {
-                    'station_type': 'Simulator',
-                    'altitude': [0, 'foot'],
-                    'latitude': 0,
-                    'longitude': 0},
-                'Simulator': {
-                    'driver': 'weewx.drivers.simulator',
-                    'mode': 'simulator'},
-                'Purple': {
-                    'binding': 'purple_binding',
-                    'hostname': hostname,
-                    'port': port},
-                'DataBindings': {
-                    'purple_binding': {
-                        'database': 'purple_sqlite',
-                        'manager': 'weewx.manager.DaySummaryManager',
-                        'table_name': 'archive',
-                        'schema': 'user.purple.schema'}},
-                'Databases': {
-                    'purple_sqlite': {
-                        'root': '%(WEEWX_ROOT)s',
-                        'database_name': temp_file.name,
-                        'driver': 'weedb.sqlite'}},
-                'Engine': {
-                    'Services': {
-                        'archive_services': 'user.purple.Purple'}}})
-            engine = StdEngine(config)
-            svc = Purple(engine, config)
-            for _ in range(4):
-                record = {
-                    'dateTime': int(time.time() + 0.5),
-                    'interval': 1
-                }
-                event = weewx.Event(weewx.END_ARCHIVE_PERIOD, record=record)
-                svc.end_archive_record(event)
-
-                time.sleep(5)
     main()

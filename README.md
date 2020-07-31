@@ -3,30 +3,38 @@
 
 ## Description
 
-A WeeWX plugin that gets its PurpleAir sensor readings from the
+A WeeWX plugin that gets its PurpleAir sensor readings either directly
+from the PurpleAir sensor or from a
 [purple-proxy](https://github.com/chaunceygardiner/weewx-purple) service.
 
 Copyright (C)2020 by John A Kline (john@johnkline.com)
 
-**THIS PLUGIN REQUIRES PYTHON 3 AND WEEWX 4**
+**This plugin requires Python 3.7, WeeWX 4 and the new schema in WeeWX 4**
 
-**Update** weewx-purple now updates loop records with pm1_0, pm2_5 and
-pm10_0 fields.  These database fields are new in WeeWX 4.  These fields
-correspond to PurpleAir's pm1_0_cf_1, pm2_5_cf_1 and pm10_cf_1 fields.
+weewx-purple requires the new database schema in WeeWX 4 that contains
+pm1_0, pm2_5 and pm10_0 fields.  Loop record fields pm1_0, pm2_5 and
+pm10_0 correspond to PurpleAir's pm1_0_cf_1, pm2_5_cf_1 and pm10_cf_1 fields.
+
+In addition to pm1_0, pm2_5 and pm10_0, AQI variables are also available
+(even though they are not in the database) via WeeWX 4's xtypes.
+pm2_5_aqi is automatically computed from pm2_5 and can be used in reports
+($current.pm2_5_aqi) and in graphs [[[[pm2_5_aqi]]].  Also available is
+pm2_5_aqi_color which is an rgbint (useful for displaying AQI in the
+appropriate color (e.g., green for AQIs <= 50).
+
 If the sensor is an outdoor sensor, the fields inserted are the averages
-of the a and b sensors.  Eventually, an option will be created to allow
-the use of the atm fields (rather than the cf_1 fields).  Likely, an
-option will also be offered to skip creating a separate database since
-the three aforementioned fileds may be enough for many.
+of the two sensors.
 
-### Why?  What does it do?
+Earlier versions of purple-proxy wrote to a separate database.  This is no
+longer the case.
+
+### What's a purple proxy?
 
 It is advantageous to query `purlpe-proxy` for readings.  `purple-proxy`
-returns an average over the archive period when queried and `purple-proxy`
-maintains archive records (not to be confused with WeeWX archive records)
-that are retrieved by this plug-in at WeeWX start in order to fill in any
-missing data.  Furthermore, if the PurpleAir device has two sensors,
-`purple-proxy` adds average fields for those sensor readings.
+returns an average over the archive period when queried.  Use of purple-proxy
+is not recommended unless the user in Unis/Linux savy.  The install is
+rather crude and has only been tested on Debian.  If in doubt, just skip
+purple-proxy and query the PuroleAir devices directly.
 
 See `weewx-purple` and `purple-proxy` in action on the following pages:
 * [Weatherbaord(TM) Report](https://www.paloaltoweather.com/weatherboard/)
@@ -51,7 +59,7 @@ See `weewx-purple` and `purple-proxy` in action on the following pages:
    be configured; but the numbering must be sonsecutive.  The order in which
    sensors/proxies are interrogated is first the proxies, low numbers to high;
    then the sensors, low numbers to high.  Once a proxy or sensor replies,
-   not further proxies/sensors are interrogated.
+   no further proxies/sensors are interrogated for the current polling round.
 
    ```
    [Purple]
@@ -92,8 +100,7 @@ See `weewx-purple` and `purple-proxy` in action on the following pages:
            starup_timeout = 60
    ```
 
-1. To get average readings over the archive period and to not miss archive
-   periods when WeeWX isn't running, install
+1. If you are Unix/Linux savy, install
    [purple-proxy](https://github.com/chaunceygardiner/purple-proxy).
 
 # How to access weewx-purple fields in reports.
@@ -101,24 +108,33 @@ See `weewx-purple` and `purple-proxy` in action on the following pages:
 Detailed instructions are pending, below is a quick and dirty set of instructions.
 At present, one will need to browse the code for more detail.
 
-For PurpleAir outdoor sensors, to report the AQI average of the A and B sensors,
-use the following:
-
+To show the PM2.5 reading, use the following:
 ```
-$latest('purple_binding').pm2_5_aqi_avg
+$current.pm2_5
 ```
 
-To report on just the A sensor in the outdoor sensor, or the only sensor in an
-indoor sensor, use the following:
-
+To show the Air Quality Index:
 ```
-$latest('purple_binding').pm2_5_aqi
+$current.pm2_5_aqi
 ```
 
-Lastly, to report on just the B sensor in the outdoor sensor, use the following:
-
+To get the RGBINT color of the current Air Quality Index:
 ```
-$latest('purple_binding').pm2_5_aqi_b
+#set $color = int($current.pm2_5_aqi_color.raw)
+#set $blue  =  $color & 255
+#set $green = ($color >> 8) & 255
+#set $red   = ($color >> 16) & 255
+RGB color of AQI is: rgb($red,$green,$blue)
+```
+
+To show the PM1.0 reading, use the following:
+```
+$current.pm1_0
+```
+
+To show the PM10.0 reading, use the following:
+```
+$current.pm10_0
 ```
 
 ## Licensing
