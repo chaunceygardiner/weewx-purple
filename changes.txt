@@ -1,6 +1,11 @@
 weewx-purple change history
 ---------------------------
 
+2.0.b2 07/31/2020
+-----------------
+1. Fix for $current.pm2_5_aqi_color
+2. Add demo skin at <HTML_ROOT>/purple
+
 2.0.b1 07/31/2020
 -----------------
 1. 2.x drops the separate purple database in favor of WeeWX 4's

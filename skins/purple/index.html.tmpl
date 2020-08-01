@@ -1,0 +1,126 @@
+## Copyright (C)2020 by John A Kline (john@johnkline.com)
+## Distributed under the terms of the GNU Public License (GPLv3)
+## See LICENSE for your rights.
+#errorCatcher Echo
+#encoding UTF-8
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8">
+    <title>weewx-purple demo page</title>
+    <style>
+      .purplenav {
+        overflow: hidden;
+      }
+      .purplenav span {
+        float: left;
+        color: #f2f2f2;
+        text-align: center;
+        padding: 14px 0px;
+        text-decoration: none;
+        font-size: 17px;
+      }
+      .purplenav span:hover {
+        background-color: #ddd;
+        color: black;
+      }
+      .purplenav span.active {
+        background-color: #367ba3;
+        color: white;
+      }
+    </style>
+  </head>
+  <body>
+    <div style="text-align:center;font-size:32px;">
+      <div>WeeWX-Purple Demo Page</div>
+#set $rgbint = int($current.pm2_5_aqi_color.raw)
+#set $red   = $rgbint >> 16
+#set $green = ($rgbint >> 8) & 255
+#set $blue  = $rgbint & 255
+##set $rgbcolor = 'rgb(' + str($red) + ',' + str($green) + ',' + str($blue) + ')'
+#set $rgbcolor = 'rgb(%d,%d,%d)' % ($red, $green, $blue)
+      <div>$obs.label.pm2_5_aqi: <span style='color:$rgbcolor;'>$current.pm2_5_aqi</span></div>
+    </div>
+    <br/>
+    <br/>
+    <div class="purplenav" style="width:100%;">
+      <table style="text-align:center;width:40%;margin-left:30%;">
+        <tr>
+          <td style="background-color:black;text-align:center;">
+            <span id="day" onclick="clickDay()" style="width:25%;" class="active">Day</span>
+            <span id="week" onclick="clickWeek()" style="width:25%;">Week</span>
+            <span id="month" onclick="clickMonth()" style="width:25%;">Month</span>
+            <span id="year" onclick="clickYear()" style="width:25%;">Year</span>
+          </td>
+        </tr>
+      </table>
+    </div>
+    <br/>
+    <br/>
+    <div id="day_block" style="text-align:center;">
+      <div style="display:inline-block;">
+        <div>
+          <img src="dayaqi.png" $graph_width alt="$obs.label.pm2_5_aqi"/>
+          <img src="daypm2_5.png" $graph_width alt="$obs.label.pm2_5"/>
+        </div>
+      </div>
+    </div>
+    <div id="week_block" style="display:none;text-align:center;">
+      <div style="display:inline-block;">
+        <div>
+          <img src="weekaqi.png" $graph_width alt="$obs.label.pm2_5_aqi"/>
+          <img src="weekpm2_5.png" $graph_width alt="$obs.label.pm2_5"/>
+        </div>
+      </div>
+    </div>
+    <div id="month_block" style="display:none;text-align:center;">
+      <div style="display:inline-block;">
+        <div>
+          <img src="monthaqi.png" $graph_width alt="$obs.label.pm2_5_aqi"/>
+          <img src="monthpm2_5.png" $graph_width alt="$obs.label.pm2_5"/>
+        </div>
+      </div>
+    </div>
+    <div id="year_block" style="display:none;text-align:center;">
+      <div style="display:inline-block;">
+        <div>
+          <img src="yearaqi.png" $graph_width alt="$obs.label.pm2_5_aqi"/>
+          <img src="yearpm2_5.png" $graph_width alt="$obs.label.pm2_5"/>
+        </div>
+      </div>
+    </div>
+    <script>
+      function resetPurpleMenuBar() {
+        document.getElementById('day').classList.remove('active');
+        document.getElementById('week').classList.remove('active');
+        document.getElementById('month').classList.remove('active');
+        document.getElementById('year').classList.remove('active');
+        document.getElementById('day_block').style.display = 'none';
+        document.getElementById('week_block').style.display = 'none';
+        document.getElementById('month_block').style.display = 'none';
+        document.getElementById('year_block').style.display = 'none';
+      }
+      function clickDay() {
+        resetPurpleMenuBar();
+        document.getElementById('day').classList.add('active');
+        document.getElementById('day_block').style.display = 'block';
+      }
+      function clickWeek() {
+        resetPurpleMenuBar();
+        document.getElementById('week').classList.add('active');
+        document.getElementById('week_block').style.display = 'block';
+      }
+      function clickMonth() {
+        resetPurpleMenuBar();
+        document.getElementById('month').classList.add('active');
+        document.getElementById('month_block').style.display = 'block';
+      }
+      function clickYear() {
+        resetPurpleMenuBar();
+        document.getElementById('year').classList.add('active');
+        document.getElementById('year_block').style.display = 'block';
+      }
+      clickDay();
+    </script>
+  </body>
+</html>

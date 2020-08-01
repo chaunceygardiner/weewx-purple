@@ -48,15 +48,15 @@ See `weewx-purple` and `purple-proxy` in action on the following pages:
 
 # Installation Instructions
 
-1. cd to the directory where this extension was cloned from github, for example:
-   `cd ~/software/weewx-purple`
+1. Download the lastest release, weewx-purple-2.0.zip, from the
+   [GitHub Repository](https://github.com/chaunceygardiner/weewx-purple).
 
 1. Run the following command.
 
-   `sudo /home/weewx/bin/wee_extension --install .`
+   `sudo /home/weewx/bin/wee_extension --install weewx-purple-2.0.zip`
 
-    Note: The above command assumes a WeeWX installation of `/home/weewx`.
-      Adjust the command as necessary.
+   Note: this command assumes weewx is installed in /home/weewx.  If it's installed
+   elsewhere, adjust the path of wee_extension accordingly.
 
 1. Edit the `Purple` section of weewx.conf (which was created by the install
    above).  PurpleAir sensors are specified with section names of `Sensor1`,
@@ -109,6 +109,13 @@ See `weewx-purple` and `purple-proxy` in action on the following pages:
 1. If you are Unix/Linux savy, install
    [purple-proxy](https://github.com/chaunceygardiner/purple-proxy).
 
+1. Restart WeeWX
+
+1. To check for a successful install, wait for a reporting cycle, then
+   navigate in a browser to the WeeWX site and add /purple to the end
+   of the URL (e.g., http:<weewx-machine>/weewx/purple).
+   The PM2.5 and AQI graphs will fill in over time.
+
 # How to access weewx-purple fields in reports.
 
 Detailed instructions are pending, below is a quick and dirty set of instructions.
@@ -130,7 +137,6 @@ To get the RGBINT color of the current Air Quality Index:
 #set $blue  =  $color & 255
 #set $green = ($color >> 8) & 255
 #set $red   = ($color >> 16) & 255
-RGB color of AQI is: rgb($red,$green,$blue)
 ```
 
 To show the PM1.0 reading, use the following:

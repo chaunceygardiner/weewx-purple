@@ -46,7 +46,7 @@ from weewx.engine import StdService
 
 log = logging.getLogger(__name__)
 
-WEEWX_PURPLE_VERSION = "2.0.b1"
+WEEWX_PURPLE_VERSION = "2.0.b2"
 
 if sys.version_info[0] < 3 or (sys.version_info[0] == 3 and sys.version_info[1] < 7):
     raise weewx.UnsupportedFeature(
@@ -504,7 +504,7 @@ class AQI(weewx.xtypes.XType):
         try:
             pm2_5 = record['pm2_5']
             value = AQI.compute_pm2_5_aqi(pm2_5)
-            if obs_type == 'pm2_5_color':
+            if obs_type == 'pm2_5_aqi_color':
                 value = AQI.compute_pm2_5_aqi_color(value)
             t, g = weewx.units.getStandardUnitType(record['usUnits'], obs_type)
             # Form the ValueTuple and return it:
@@ -552,7 +552,7 @@ class AQI(weewx.xtypes.XType):
                     std_unit_system = unit_system
 
                 value = AQI.compute_pm2_5_aqi(pm2_5)
-                if obs_type == 'pm2_5_color':
+                if obs_type == 'pm2_5_aqi_color':
                     value = AQI.compute_pm2_5_aqi_color(value)
                 log.debug('get_series(%s): %s - %s - %s' % (obs_type,
                     timestamp_to_string(ts - interval * 60),
@@ -615,7 +615,7 @@ class AQI(weewx.xtypes.XType):
 
         if value is not None:
             value = AQI.compute_pm2_5_aqi(value)
-            if obs_type == 'pm2_5_color':
+            if obs_type == 'pm2_5_aqi_color':
                 value = AQI.compute_pm2_5_aqi_color(value)
         t, g = weewx.units.getStandardUnitType(std_unit_system, obs_type, aggregate_type)
         # Form the ValueTuple and return it:

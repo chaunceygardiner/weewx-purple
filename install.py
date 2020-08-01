@@ -32,13 +32,20 @@ def loader():
 class PurpleInstaller(ExtensionInstaller):
     def __init__(self):
         super(PurpleInstaller, self).__init__(
-            version="2.0.b1",
+            version="2.0.b2",
             name='purple',
             description='Record air quality via purple-proxy service.',
             author="John A Kline",
             author_email="john@johnkline.com",
             data_services='user.purple.Purple',
-            config={
+            config = {
+                'StdReport': {
+                    'PurpleReport': {
+                        'HTML_ROOT':'purple',
+                        'enable': 'true',
+                        'skin':'purple',
+                    },
+                },
                 'Purple': {
                     'Proxy1'   : {
                         'enable'         : False,
@@ -78,5 +85,11 @@ class PurpleInstaller(ExtensionInstaller):
                     },
                 },
             },
-            files=[('bin/user', ['bin/user/purple.py']), ]
-            )
+            files=[
+                ('bin/user', ['bin/user/purple.py']),
+                ('skins/nws', [
+                    'skins/purple/index.html.tmpl',
+                    'skins/purple/skin.conf',
+                ]),
+            ]
+        )
