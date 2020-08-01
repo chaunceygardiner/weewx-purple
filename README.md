@@ -48,7 +48,7 @@ See `weewx-purple` and `purple-proxy` in action on the following pages:
 
 # Installation Instructions
 
-1. If you don't meet the following requirements, don't install this extension.
+If you don't meet the following requirements, don't install this extension.
   * WeeWX 4
   * Using WeeWX 4's new wview_extended schema.
   * Python 3.7 or greater
