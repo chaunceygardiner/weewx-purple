@@ -1,6 +1,12 @@
 weewx-purple change history
 ---------------------------
 
+2.0 07/31/2020
+-----------------
+1. Release of weewx-purple.
+2. Purple no longer creates a separate purple.sdb database.
+3. 2.0 Requires the wview_extended schema in WeeWX 4.
+
 2.0.b2 07/31/2020
 -----------------
 1. Fix for $current.pm2_5_aqi_color
