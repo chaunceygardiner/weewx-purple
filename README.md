@@ -113,7 +113,7 @@ See `weewx-purple` and `purple-proxy` in action on the following pages:
 
 1. To check for a successful install, wait for a reporting cycle, then
    navigate in a browser to the WeeWX site and add /purple to the end
-   of the URL (e.g., http:<weewx-machine>/weewx/purple).
+   of the URL (e.g., http://weewx-machine/weewx/purple).
    The PM2.5 and AQI graphs will fill in over time.
 
 # How to access weewx-purple fields in reports.
