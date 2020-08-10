@@ -483,7 +483,7 @@ class AQI(weewx.xtypes.XType):
     @staticmethod
     def compute_pm2_5_aqi_color(pm2_5_aqi):
         if pm2_5_aqi <= 50:
-            return 255 << 8                 # Green
+            return 128 << 8                 # Green
         elif pm2_5_aqi <= 100:
             return (255 << 16) + (255 << 8) # Yellow
         elif pm2_5_aqi <=  150:
