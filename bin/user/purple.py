@@ -459,26 +459,26 @@ class AQI(weewx.xtypes.XType):
         #
         #  AQI Category  AQI Value  24-hr PM2.5
         # Good             0 -  50    0.0 -  12.0
-        # Moderate        50 - 100   12.0 -  35.4
-        # USG            100 - 150   35.4 -  55.4
-        # Unhealthy      150 - 200   55.4 - 150.4
-        # Very Unhealthy 200 - 300  150.4 - 250.4
-        # Hazardous      300 - 400  250.4 - 350.4
-        # Hazardous      400 - 500  350.4 - 500.0
+        # Moderate        51 - 100   12.0 -  35.4
+        # USG            101 - 150   35.4 -  55.4
+        # Unhealthy      151 - 200   55.4 - 150.4
+        # Very Unhealthy 201 - 300  150.4 - 250.4
+        # Hazardous      301 - 400  250.4 - 350.4
+        # Hazardous      401 - 500  350.4 - 500.0
         if pm2_5 <= 12.0: # Good
             return pm2_5 / 12.0 * 50
         elif pm2_5 <= 35.4: # Moderate
-            return (pm2_5 - 12.0) / 23.4 * 50.0 + 50.0
+            return (pm2_5 - 12.0) / 23.4 * 49.0 + 51.0
         elif pm2_5 <= 55.4: # Unhealthy for senstive
-            return (pm2_5 - 35.4) / 20.0 * 50.0 + 100.0
+            return (pm2_5 - 35.4) / 20.0 * 49.0 + 101.0
         elif pm2_5 <= 150.4: # Unhealthy
-            return (pm2_5 - 55.4) / 95.0 * 50.0 + 150.0
+            return (pm2_5 - 55.4) / 95.0 * 49.0 + 151.0
         elif pm2_5 <= 250.4: # Very Unhealthy
-            return (pm2_5 - 150.4) / 100.0 * 100.0 + 200.0
+            return (pm2_5 - 150.4) / 100.0 * 99.0 + 201.0
         elif pm2_5 <= 350.4: # Hazardous
-            return (pm2_5 - 250.4) / 100.0 * 100.0 + 300.0
+            return (pm2_5 - 250.4) / 100.0 * 99.0 + 301.0
         else: # Hazardous
-            return (pm2_5 - 350.4) / 149.6 * 100.0 + 400.0
+            return (pm2_5 - 350.4) / 149.6 * 99.0 + 401.0
 
     @staticmethod
     def compute_pm2_5_aqi_color(pm2_5_aqi):
