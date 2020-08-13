@@ -33,6 +33,7 @@
   <body>
     <div style="text-align:center;font-size:32px;">
       <div>WeeWX-Purple Demo Page</div>
+#if $current.pm2_5_aqi.has_data
 #set $rgbint = int($current.pm2_5_aqi_color.raw)
 #set $red   = $rgbint >> 16
 #set $green = ($rgbint >> 8) & 255
@@ -40,6 +41,9 @@
 ##set $rgbcolor = 'rgb(' + str($red) + ',' + str($green) + ',' + str($blue) + ')'
 #set $rgbcolor = 'rgb(%d,%d,%d)' % ($red, $green, $blue)
       <div>$obs.label.pm2_5_aqi: <span style='color:$rgbcolor;'>$current.pm2_5_aqi</span></div>
+#else
+      <div>$obs.label.pm2_5_aqi: <span style='color:gray;'>Unavailable</span></div>
+#end if
     </div>
     <br/>
     <br/>
