@@ -487,7 +487,7 @@ class AQI(weewx.xtypes.XType):
         elif pm2_5_aqi <= 100:
             return (255 << 16) + (255 << 8) # Yellow
         elif pm2_5_aqi <=  150:
-            return (255 << 16) + (165 << 8) # Orange
+            return (255 << 16) + (140 << 8) # Orange
         elif pm2_5_aqi <= 200: 
             return 255 << 16                # Red
         elif pm2_5_aqi <= 300:
@@ -501,6 +501,10 @@ class AQI(weewx.xtypes.XType):
         if obs_type not in [ 'pm2_5_aqi', 'pm2_5_aqi_color' ]:
             raise weewx.UnknownType(obs_type)
         log.debug('get_scalar(%s)' % obs_type)
+        if record is None:
+            # Record of None has been observed.
+            log.info('get_scalar called with where record argument is None.')
+            raise weewx.CannotCalculate(obs_type)
         try:
             pm2_5 = record['pm2_5']
             value = AQI.compute_pm2_5_aqi(pm2_5)
