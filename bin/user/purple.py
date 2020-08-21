@@ -130,16 +130,16 @@ def get_concentrations(cfg: Configuration):
                     continue
                 concentrations = Concentrations(
                     timestamp  = reading_ts,
-                    pm1_0      = to_float(record['pm1_0_cf_1']),
-                    pm2_5      = to_float(record['pm2_5_cf_1']),
-                    pm10_0     = to_float(record['pm10_0_cf_1']),
+                    pm1_0      = to_float(record['pm1_0_atm']),
+                    pm2_5      = to_float(record['pm2_5_atm']),
+                    pm10_0     = to_float(record['pm10_0_atm']),
                 )
                 # If there is a 'b' sensor, add it in and average the readings
                 log.debug('get_concentrations: concentrations BEFORE averaing in b reading: %s' % concentrations)
-                if 'pm1_0_cf_1_b' in record:
-                    concentrations.pm1_0      = (concentrations.pm1_0  + to_float(record['pm1_0_cf_1_b'])) / 2.0
-                    concentrations.pm2_5      = (concentrations.pm2_5  + to_float(record['pm2_5_cf_1_b'])) / 2.0
-                    concentrations.pm10_0     = (concentrations.pm10_0 + to_float(record['pm10_0_cf_1_b'])) / 2.0
+                if 'pm1_0_atm_b' in record:
+                    concentrations.pm1_0      = (concentrations.pm1_0  + to_float(record['pm1_0_atm_b'])) / 2.0
+                    concentrations.pm2_5      = (concentrations.pm2_5  + to_float(record['pm2_5_atm_b'])) / 2.0
+                    concentrations.pm10_0     = (concentrations.pm10_0 + to_float(record['pm10_0_atm_b'])) / 2.0
                 log.debug('get_concentrations: concentrations: %s' % concentrations)
                 return concentrations
     log.error('Could not get concentrations from any source.')

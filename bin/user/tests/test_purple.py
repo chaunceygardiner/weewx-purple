@@ -89,9 +89,9 @@ class PurpleTests(unittest.TestCase):
         self.assertEqual(user.purple.AQI.compute_pm2_5_aqi_color(100), (255 << 16) + (255 << 8))
 
         # USG
-        self.assertEqual(user.purple.AQI.compute_pm2_5_aqi_color(101), (255 << 16) + (165 << 8))
-        self.assertEqual(user.purple.AQI.compute_pm2_5_aqi_color(125), (255 << 16) + (165 << 8))
-        self.assertEqual(user.purple.AQI.compute_pm2_5_aqi_color(150), (255 << 16) + (165 << 8))
+        self.assertEqual(user.purple.AQI.compute_pm2_5_aqi_color(101), (255 << 16) + (140 << 8))
+        self.assertEqual(user.purple.AQI.compute_pm2_5_aqi_color(125), (255 << 16) + (140 << 8))
+        self.assertEqual(user.purple.AQI.compute_pm2_5_aqi_color(150), (255 << 16) + (140 << 8))
 
         # Unhealthy
         self.assertEqual(user.purple.AQI.compute_pm2_5_aqi_color(151), (255 << 16))
