@@ -501,7 +501,7 @@ class AQI(weewx.xtypes.XType):
         if obs_type not in [ 'pm2_5_aqi', 'pm2_5_aqi_color' ]:
             raise weewx.UnknownType(obs_type)
         log.debug('get_scalar(%s)' % obs_type)
-        if record is None:
+        if record is None or 'pm2_5' not in record:
             # Record of None has been observed.
             log.info('get_scalar called with where record argument is None.')
             raise weewx.CannotCalculate(obs_type)
