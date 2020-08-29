@@ -1,6 +1,13 @@
 weewx-purple change history
 ---------------------------
 
+2.1 08/29/2020
+-----------------
+1. Add support for LRAPA conversions (useful for wild fires).
+   pm2_5_lrapa
+   pm2_5_lrapa_aqi
+   pm2_5_lrapa_aqi_color
+
 2.0 07/31/2020
 -----------------
 1. Release of weewx-purple.

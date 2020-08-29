@@ -32,7 +32,7 @@ def loader():
 class PurpleInstaller(ExtensionInstaller):
     def __init__(self):
         super(PurpleInstaller, self).__init__(
-            version="2.0",
+            version="2.1",
             name='purple',
             description='Record air quality via purple-proxy service.',
             author="John A Kline",

@@ -126,6 +126,9 @@ If you don't meet the following requirements, don't install this extension.
 Detailed instructions are pending, below is a quick and dirty set of instructions.
 At present, one will need to browse the code for more detail.
 
+Note: Although the examples below show the use of $current, aggregates are also
+supported (e.g., the high PM2.5 for the week can be presented with `$week.pm2_5.max`.
+
 To show the PM2.5 reading, use the following:
 ```
 $current.pm2_5
@@ -139,6 +142,24 @@ $current.pm2_5_aqi
 To get the RGBINT color of the current Air Quality Index:
 ```
 #set $color = int($current.pm2_5_aqi_color.raw)
+#set $blue  =  $color & 255
+#set $green = ($color >> 8) & 255
+#set $red   = ($color >> 16) & 255
+```
+
+To show the PM2.5 reading with LRAPA conversion, use the following:
+```
+$current.pm2_5_lrapa
+```
+
+To show the Air Quality Index:
+```
+$current.pm2_5_lrapa_aqi
+```
+
+To get the RGBINT color of the current Air Quality Index:
+```
+#set $color = int($current.pm2_5_lrapa_aqi_color.raw)
 #set $blue  =  $color & 255
 #set $green = ($color >> 8) & 255
 #set $red   = ($color >> 16) & 255
