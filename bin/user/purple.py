@@ -21,6 +21,7 @@ WeeWX module that records PurpleAir air quality sensor readings.
 import datetime
 import json
 import logging
+import math
 import requests
 import sys
 import threading
@@ -46,7 +47,7 @@ from weewx.engine import StdService
 
 log = logging.getLogger(__name__)
 
-WEEWX_PURPLE_VERSION = "2.1"
+WEEWX_PURPLE_VERSION = "2.1.1"
 
 if sys.version_info[0] < 3 or (sys.version_info[0] == 3 and sys.version_info[1] < 7):
     raise weewx.UnsupportedFeature(
@@ -467,26 +468,31 @@ class AQI(weewx.xtypes.XType):
         #
         #  AQI Category  AQI Value  24-hr PM2.5
         # Good             0 -  50    0.0 -  12.0
-        # Moderate        51 - 100   12.0 -  35.4
-        # USG            101 - 150   35.4 -  55.4
-        # Unhealthy      151 - 200   55.4 - 150.4
-        # Very Unhealthy 201 - 300  150.4 - 250.4
-        # Hazardous      301 - 400  250.4 - 350.4
-        # Hazardous      401 - 500  350.4 - 500.0
-        if pm2_5 <= 12.0: # Good
-            return pm2_5 / 12.0 * 50
-        elif pm2_5 <= 35.4: # Moderate
-            return (pm2_5 - 12.0) / 23.4 * 49.0 + 51.0
-        elif pm2_5 <= 55.4: # Unhealthy for senstive
-            return (pm2_5 - 35.4) / 20.0 * 49.0 + 101.0
-        elif pm2_5 <= 150.4: # Unhealthy
-            return (pm2_5 - 55.4) / 95.0 * 49.0 + 151.0
-        elif pm2_5 <= 250.4: # Very Unhealthy
-            return (pm2_5 - 150.4) / 100.0 * 99.0 + 201.0
-        elif pm2_5 <= 350.4: # Hazardous
-            return (pm2_5 - 250.4) / 100.0 * 99.0 + 301.0
+        # Moderate        51 - 100   12.1 -  35.4
+        # USG            101 - 150   35.5 -  55.4
+        # Unhealthy      151 - 200   55.5 - 150.4
+        # Very Unhealthy 201 - 300  150.5 - 250.4
+        # Hazardous      301 - 400  250.5 - 350.4
+        # Hazardous      401 - 500  350.5 - 500.4
+
+        # The EPA standard for AQI says to truncate PM2.5 to one decimal place.
+        # See https://www3.epa.gov/airnow/aqi-technical-assistance-document-sept2018.pdf
+        x = math.trunc(pm2_5 * 10) / 10
+
+        if x <= 12.0: # Good
+            return x / 12.0 * 50
+        elif x <= 35.4: # Moderate
+            return (x - 12.1) / 23.3 * 49.0 + 51.0
+        elif x <= 55.4: # Unhealthy for senstive
+            return (x - 35.5) / 19.9 * 49.0 + 101.0
+        elif x <= 150.4: # Unhealthy
+            return (x - 55.5) / 94.9 * 49.0 + 151.0
+        elif x <= 250.4: # Very Unhealthy
+            return (x - 150.5) / 99.9 * 99.0 + 201.0
+        elif x <= 350.4: # Hazardous
+            return (x - 250.5) / 99.9 * 99.0 + 301.0
         else: # Hazardous
-            return (pm2_5 - 350.4) / 149.6 * 99.0 + 401.0
+            return (x - 350.5) / 149.9 * 99.0 + 401.0
 
     @staticmethod
     def compute_pm2_5_aqi_color(pm2_5_aqi):

@@ -1,6 +1,13 @@
 weewx-purple change history
 ---------------------------
 
+2.1.1 08/30/2020
+----------------
+1. Tweak to AQI calculations.  Per EPA spec at
+   https://www3.epa.gov/airnow/aqi-technical-assistance-document-sept2018.pdf 
+   PM2.5 concentrations need to be truncated to 1 decimal place
+   before the AQI is calculated.
+
 2.1 08/29/2020
 -----------------
 1. Add support for LRAPA conversions (useful for wild fires).

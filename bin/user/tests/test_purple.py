@@ -20,13 +20,13 @@ class PurpleTests(unittest.TestCase):
     #             U.S. EPA PM2.5 AQI
     #
     #  AQI Category  AQI Value  24-hr PM2.5
-    # Good             0 -  50    0.0 -  12.0 Green
-    # Moderate        50 - 100   12.0 -  35.4 Yellow
-    # USG            100 - 150   35.4 -  55.4 Orange
-    # Unhealthy      150 - 200   55.4 - 150.4 Red
-    # Very Unhealthy 200 - 300  150.4 - 250.4 Purple
-    # Hazardous      300 - 400  250.4 - 350.4 Maroon
-    # Hazardous      400 - 500  350.4 - 500.0 Maroon
+    # Good             0 -  50    0.0 -  12.0
+    # Moderate        51 - 100   12.1 -  35.4
+    # USG            101 - 150   35.5 -  55.4
+    # Unhealthy      151 - 200   55.5 - 150.4
+    # Very Unhealthy 201 - 300  150.5 - 250.4
+    # Hazardous      301 - 400  250.5 - 350.4
+    # Hazardous      401 - 500  350.5 - 500.4
 
     def test_compute_pm2_5_aqi(self):
 
@@ -34,47 +34,55 @@ class PurpleTests(unittest.TestCase):
         self.assertEqual(user.purple.AQI.compute_pm2_5_aqi( 0.0), 0)
         self.assertEqual(user.purple.AQI.compute_pm2_5_aqi( 6.0), 25)
         self.assertEqual(user.purple.AQI.compute_pm2_5_aqi(12.0), 50)
+        # 12.099 is truncated to 12
+        self.assertEqual(user.purple.AQI.compute_pm2_5_aqi(12.099), 50)
 
         # Moderate
-        self.assertTrue(user.purple.AQI.compute_pm2_5_aqi(12.001) > 51.00209 and user.purple.AQI.compute_pm2_5_aqi(12.001) < 51.00210)
-        self.assertEqual(user.purple.AQI.compute_pm2_5_aqi(23.700),  75.5)
-        self.assertEqual(user.purple.AQI.compute_pm2_5_aqi(35.400), 100)
+        self.assertEqual(user.purple.AQI.compute_pm2_5_aqi(12.1),  51)
+        aqi = user.purple.AQI.compute_pm2_5_aqi(23.7)
+        self.assertTrue(aqi > 75.3948 and aqi < 75.3949)
+        self.assertEqual(user.purple.AQI.compute_pm2_5_aqi(35.499), 100)
 
         # USG
-        self.assertTrue(user.purple.AQI.compute_pm2_5_aqi(35.401) > 101.00245 and user.purple.AQI.compute_pm2_5_aqi(35.401) < 101.00246)
-        self.assertEqual(user.purple.AQI.compute_pm2_5_aqi(45.400), 125.5)
-        self.assertEqual(user.purple.AQI.compute_pm2_5_aqi(55.400), 150)
+        self.assertEqual(user.purple.AQI.compute_pm2_5_aqi(35.5), 101)
+        aqi = user.purple.AQI.compute_pm2_5_aqi(45.4)
+        self.assertTrue(aqi > 125.3768 and aqi < 125.3769)
+        self.assertEqual(user.purple.AQI.compute_pm2_5_aqi(55.4), 150)
 
         # Unhealthy
-        self.assertTrue(user.purple.AQI.compute_pm2_5_aqi( 55.401) > 151.000515 and user.purple.AQI.compute_pm2_5_aqi( 55.401) < 151.000516)
-        self.assertEqual(user.purple.AQI.compute_pm2_5_aqi(102.900), 175.5)
-        self.assertEqual(user.purple.AQI.compute_pm2_5_aqi(150.400), 200)
+        self.assertEqual(user.purple.AQI.compute_pm2_5_aqi( 55.5), 151)
+        aqi = user.purple.AQI.compute_pm2_5_aqi(102.9)
+        self.assertTrue(aqi, 175.4)
+        self.assertEqual(user.purple.AQI.compute_pm2_5_aqi(150.4), 200)
 
         # Very Unhealthy
-        self.assertTrue(user.purple.AQI.compute_pm2_5_aqi(150.401) > 201.00098 and user.purple.AQI.compute_pm2_5_aqi(150.401) < 201.00100)
-        self.assertEqual(user.purple.AQI.compute_pm2_5_aqi(200.400), 250.5)
-        self.assertEqual(user.purple.AQI.compute_pm2_5_aqi(250.400), 300)
+        self.assertEqual(user.purple.AQI.compute_pm2_5_aqi(150.5), 201)
+        aqi = user.purple.AQI.compute_pm2_5_aqi(200.4)
+        self.assertTrue(aqi > 250.4504 and aqi < 250.4505)
+        self.assertEqual(user.purple.AQI.compute_pm2_5_aqi(250.4), 300)
 
         # Harzadous
-        self.assertTrue(user.purple.AQI.compute_pm2_5_aqi(250.401) > 301.00098 and user.purple.AQI.compute_pm2_5_aqi(250.401) < 301.00100)
-        self.assertEqual(user.purple.AQI.compute_pm2_5_aqi(300.400), 350.5)
-        self.assertEqual(user.purple.AQI.compute_pm2_5_aqi(350.400), 400)
+        self.assertEqual(user.purple.AQI.compute_pm2_5_aqi(250.5), 301)
+        aqi = user.purple.AQI.compute_pm2_5_aqi(300.4)
+        self.assertTrue(aqi > 350.4504 and aqi < 350.4505)
+        self.assertEqual(user.purple.AQI.compute_pm2_5_aqi(350.4), 400)
 
         # Harzadous
-        self.assertTrue(user.purple.AQI.compute_pm2_5_aqi(350.401) > 401.000661 and user.purple.AQI.compute_pm2_5_aqi(350.401) < 401.000662)
-        self.assertEqual(user.purple.AQI.compute_pm2_5_aqi(425.200), 450.5)
-        self.assertEqual(user.purple.AQI.compute_pm2_5_aqi(500.000), 500)
+        self.assertEqual(user.purple.AQI.compute_pm2_5_aqi(350.5), 401)
+        aqi = user.purple.AQI.compute_pm2_5_aqi(425.45)
+        self.assertTrue(aqi > 450.4 and aqi < 450.6)
+        self.assertEqual(user.purple.AQI.compute_pm2_5_aqi(500.4), 500)
 
     #             U.S. EPA PM2.5 AQI
     #
     #  AQI Category  AQI Value  24-hr PM2.5
-    # Good             0 -  50    0.0 -  12.0 Green
-    # Moderate        51 - 100   12.0 -  35.4 Yellow
-    # USG            101 - 150   35.4 -  55.4 Orange
-    # Unhealthy      151 - 200   55.4 - 150.4 Red
-    # Very Unhealthy 201 - 300  150.4 - 250.4 Purple
-    # Hazardous      301 - 400  250.4 - 350.4 Maroon
-    # Hazardous      401 - 500  350.4 - 500.0 Maroon
+    # Good             0 -  50    0.0 -  12.0
+    # Moderate        51 - 100   12.1 -  35.4
+    # USG            101 - 150   35.5 -  55.4
+    # Unhealthy      151 - 200   55.5 - 150.4
+    # Very Unhealthy 201 - 300  150.5 - 250.4
+    # Hazardous      301 - 400  250.5 - 350.4
+    # Hazardous      401 - 500  350.5 - 500.4
 
     def test_compute_pm2_5_aqi_color(self):
 
