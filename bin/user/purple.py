@@ -529,6 +529,9 @@ class AQI(weewx.xtypes.XType):
         if 'pm2_5' not in record:
             log.info('get_scalar called where record does not contain pm2_5.')
             raise weewx.CannotCalculate(obs_type)
+        if record['pm2_5'] is None:
+            log.info('get_scalar called where record[pm2_5] is None.')
+            raise weewx.CannotCalculate(obs_type)
         try:
             pm2_5 = record['pm2_5']
             if obs_type == 'pm2_5_aqi':
@@ -656,6 +659,9 @@ class AQI(weewx.xtypes.XType):
         row = db_manager.getSql(select_stmt)
         if row:
             value, std_unit_system = row
+        else:
+            value = None
+            std_unit_system = None
 
         if value is not None:
             if obs_type == 'pm2_5_aqi':
