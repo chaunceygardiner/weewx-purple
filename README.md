@@ -147,19 +147,38 @@ To get the RGBINT color of the current Air Quality Index:
 #set $red   = ($color >> 16) & 255
 ```
 
-To show the PM2.5 reading with LRAPA conversion, use the following:
+To show the PM2.5 reading with LRAPA (Lane Regional Air Protection Agency)
+conversion, use the following:
 ```
 $current.pm2_5_lrapa
 ```
 
-To show the Air Quality Index:
+To show the LRAPA Air Quality Index:
 ```
 $current.pm2_5_lrapa_aqi
 ```
 
-To get the RGBINT color of the current Air Quality Index:
+To get the RGBINT color of the current LRAPA Air Quality Index:
 ```
 #set $color = int($current.pm2_5_lrapa_aqi_color.raw)
+#set $blue  =  $color & 255
+#set $green = ($color >> 8) & 255
+#set $red   = ($color >> 16) & 255
+
+To show the PM2.5 reading with UNBC (University of Northern British Columbia)
+conversion, use the following:
+```
+$current.pm2_5_unbc
+```
+
+To show the UNBC Air Quality Index:
+```
+$current.pm2_5_unbc_aqi
+```
+
+To get the RGBINT color of the current UNBC Air Quality Index:
+```
+#set $color = int($current.pm2_5_unbc_aqi_color.raw)
 #set $blue  =  $color & 255
 #set $green = ($color >> 8) & 255
 #set $red   = ($color >> 16) & 255

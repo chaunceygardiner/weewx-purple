@@ -121,5 +121,28 @@ class PurpleTests(unittest.TestCase):
         self.assertEqual(user.purple.AQI.compute_pm2_5_aqi_color(450), 128 << 16)
         self.assertEqual(user.purple.AQI.compute_pm2_5_aqi_color(500), 128 << 16)
 
+    def test_compute_pm2_5_lrapa(self):
+        # value = pm2_5 / 2 - 0.66
+        self.assertEqual(user.purple.AQI.compute_pm2_5_lrapa(0.0), 0)
+        self.assertEqual(user.purple.AQI.compute_pm2_5_lrapa(100.0), 49.34)
+        self.assertEqual(user.purple.AQI.compute_pm2_5_lrapa(200.0), 99.34)
+
+    def test_compute_pm2_5_unbc(self):
+        # 0 m⁻³:
+        # PM₂.₅ = PA
+        # 
+        # 0+ - 20 μg m⁻³:
+        # PM₂.₅ = 0.6 x PA + 3.4
+        # 
+        # 20+ - 200 μg m⁻³:
+        # PM₂.₅ = 0.6 x PA + 2.5
+        # 
+        # 200+ μg m⁻³:
+        # PM₂.₅ = 1.6 x PA - 194
+        self.assertEqual(user.purple.AQI.compute_pm2_5_unbc(0.0), 0.0)
+        self.assertEqual(user.purple.AQI.compute_pm2_5_unbc(20.0), 15.4)
+        self.assertEqual(user.purple.AQI.compute_pm2_5_unbc(200.0), 122.5)
+        self.assertEqual(user.purple.AQI.compute_pm2_5_unbc(300.0), 286.0)
+
 if __name__ == '__main__':
     unittest.main()

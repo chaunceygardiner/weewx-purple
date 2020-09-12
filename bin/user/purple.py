@@ -71,6 +71,8 @@ weewx.units.default_unit_label_dict['pm2_5_aqi']  = ' AQI'
 weewx.units.default_unit_label_dict['pm2_5_aqi_color'] = ' RGB'
 weewx.units.default_unit_label_dict['pm2_5_lrapa_aqi']  = ' AQI'
 weewx.units.default_unit_label_dict['pm2_5_lrapa_aqi_color'] = ' RGB'
+weewx.units.default_unit_label_dict['pm2_5_unbc_aqi']  = ' AQI'
+weewx.units.default_unit_label_dict['pm2_5_unbc_aqi_color'] = ' RGB'
 
 weewx.units.default_unit_format_dict['aqi']  = '%d'
 weewx.units.default_unit_format_dict['aqi_color'] = '%d'
@@ -80,6 +82,9 @@ weewx.units.obs_group_dict['pm2_5_aqi_color'] = 'air_quality_color'
 weewx.units.obs_group_dict['pm2_5_lrapa'] = 'group_concentration'
 weewx.units.obs_group_dict['pm2_5_lrapa_aqi'] = 'air_quality_index'
 weewx.units.obs_group_dict['pm2_5_lrapa_aqi_color'] = 'air_quality_color'
+weewx.units.obs_group_dict['pm2_5_unbc'] = 'group_concentration'
+weewx.units.obs_group_dict['pm2_5_unbc_aqi'] = 'air_quality_index'
+weewx.units.obs_group_dict['pm2_5_unbc_aqi_color'] = 'air_quality_color'
 
 class Source:
     def __init__(self, config_dict, name, is_proxy):
@@ -337,6 +342,9 @@ class Purple(StdService):
                 event.packet['pm2_5_lrapa'] = AQI.compute_pm2_5_lrapa(event.packet['pm2_5'])
                 event.packet['pm2_5_lrapa_aqi'] = AQI.compute_pm2_5_aqi(event.packet['pm2_5_lrapa'])
                 event.packet['pm2_5_lrapa_aqi_color'] = AQI.compute_pm2_5_aqi_color(event.packet['pm2_5_lrapa_aqi'])
+                event.packet['pm2_5_unbc'] = AQI.compute_pm2_5_unbc(event.packet['pm2_5'])
+                event.packet['pm2_5_unbc_aqi'] = AQI.compute_pm2_5_aqi(event.packet['pm2_5_unbc'])
+                event.packet['pm2_5_unbc_aqi_color'] = AQI.compute_pm2_5_aqi_color(event.packet['pm2_5_unbc_aqi'])
                 log.debug('Time of reading being inserted: %s' % timestamp_to_string(self.cfg.concentrations.timestamp))
                 log.debug('Inserted packet[pm1_0]: %f into packet.' % self.cfg.concentrations.pm1_0)
                 log.debug('Inserted packet[pm2_5]: %f into packet.' % self.cfg.concentrations.pm2_5)
@@ -516,11 +524,34 @@ class AQI(weewx.xtypes.XType):
             value = 0
         return value
 
+    def compute_pm2_5_unbc(pm2_5):
+        # 0 μg m⁻³:
+        # PM₂.₅ = PA
+        #
+        # 0+ - 20 μg m⁻³:
+        # PM₂.₅ = 0.6 x PA + 3.4
+        # 
+        # 20+ - 200 μg m⁻³:
+        # PM₂.₅ = 0.6 x PA + 2.5
+        # 
+        # 200+ μg m⁻³:
+        # PM₂.₅ = 1.6 x PA - 194
+        if pm2_5 == 0:
+            value = pm2_5
+        elif pm2_5 <= 20:
+            value = 0.6 * pm2_5 + 3.4
+        elif pm2_5 <= 200:
+            value = 0.6 * pm2_5 + 2.5
+        else:
+            value = 1.6 * pm2_5 - 194
+        return value
+
     @staticmethod
     def get_scalar(obs_type, record, db_manager=None):
         log.debug('get_scalar(%s)' % obs_type)
         if obs_type not in [ 'pm2_5_aqi', 'pm2_5_aqi_color', 'pm2_5_lrapa',
-                             'pm2_5_lrapa_aqi', 'pm2_5_lrapa_aqi_color' ]:
+                             'pm2_5_lrapa_aqi', 'pm2_5_lrapa_aqi_color',
+                             'pm2_5_unbc', 'pm2_5_unbc_aqi', 'pm2_5_unbc_aqi_color' ]:
             raise weewx.UnknownType(obs_type)
         log.debug('get_scalar(%s)' % obs_type)
         if record is None:
@@ -544,6 +575,12 @@ class AQI(weewx.xtypes.XType):
                 value = AQI.compute_pm2_5_aqi(AQI.compute_pm2_5_lrapa(pm2_5))
             elif obs_type == 'pm2_5_lrapa_aqi_color':
                 value = AQI.compute_pm2_5_aqi_color(AQI.compute_pm2_5_aqi(AQI.compute_pm2_5_lrapa(pm2_5)))
+            elif obs_type == 'pm2_5_unbc':
+                value = AQI.compute_pm2_5_unbc(pm2_5)
+            elif obs_type == 'pm2_5_unbc_aqi':
+                value = AQI.compute_pm2_5_aqi(AQI.compute_pm2_5_unbc(pm2_5))
+            elif obs_type == 'pm2_5_unbc_aqi_color':
+                value = AQI.compute_pm2_5_aqi_color(AQI.compute_pm2_5_aqi(AQI.compute_pm2_5_unbc(pm2_5)))
             t, g = weewx.units.getStandardUnitType(record['usUnits'], obs_type)
             # Form the ValueTuple and return it:
             return weewx.units.ValueTuple(value, t, g)
@@ -557,7 +594,8 @@ class AQI(weewx.xtypes.XType):
         """
 
         if obs_type not in [ 'pm2_5_aqi', 'pm2_5_aqi_color', 'pm2_5_lrapa',
-                             'pm2_5_lrapa_aqi', 'pm2_5_lrapa_aqi_color' ]:
+                             'pm2_5_lrapa_aqi', 'pm2_5_lrapa_aqi_color',
+                             'pm2_5_unbc', 'pm2_5_unbc_aqi', 'pm2_5_unbc_aqi_color' ]:
             raise weewx.UnknownType(obs_type)
 
         log.debug('get_series(%s, %s, %s, aggregate:%s, aggregate_interval:%s)' % (
@@ -600,6 +638,12 @@ class AQI(weewx.xtypes.XType):
                     value = AQI.compute_pm2_5_aqi(AQI.compute_pm2_5_lrapa(pm2_5))
                 elif obs_type == 'pm2_5_lrapa_aqi_color':
                     value = AQI.compute_pm2_5_aqi_color(AQI.compute_pm2_5_aqi(AQI.compute_pm2_5_lrapa(pm2_5)))
+                elif obs_type == 'pm2_5_unbc':
+                    value = AQI.compute_pm2_5_unbc(pm2_5)
+                elif obs_type == 'pm2_5_unbc_aqi':
+                    value = AQI.compute_pm2_5_aqi(AQI.compute_pm2_5_unbc(pm2_5))
+                elif obs_type == 'pm2_5_unbc_aqi_color':
+                    value = AQI.compute_pm2_5_aqi_color(AQI.compute_pm2_5_aqi(AQI.compute_pm2_5_unbc(pm2_5)))
                 log.debug('get_series(%s): %s - %s - %s' % (obs_type,
                     timestamp_to_string(ts - interval * 60),
                     timestamp_to_string(ts), value))
@@ -635,7 +679,8 @@ class AQI(weewx.xtypes.XType):
         returns: A ValueTuple containing the result.
         """
         if obs_type not in [ 'pm2_5_aqi', 'pm2_5_aqi_color', 'pm2_5_lrapa',
-                             'pm2_5_lrapa_aqi', 'pm2_5_lrapa_aqi_color' ]:
+                             'pm2_5_lrapa_aqi', 'pm2_5_lrapa_aqi_color',
+                             'pm2_5_unbc', 'pm2_5_unbc_aqi', 'pm2_5_unbc_aqi_color' ]:
             raise weewx.UnknownType(obs_type)
 
         log.debug('get_aggregate(%s, %s, %s, aggregate:%s)' % (
@@ -674,6 +719,12 @@ class AQI(weewx.xtypes.XType):
                 value = AQI.compute_pm2_5_aqi(AQI.compute_pm2_5_lrapa(value))
             elif obs_type == 'pm2_5_lrapa_aqi_color':
                 value = AQI.compute_pm2_5_aqi_color(AQI.compute_pm2_5_aqi(AQI.compute_pm2_5_lrapa(value)))
+            elif obs_type == 'pm2_5_unbc':
+                value = AQI.compute_pm2_5_unbc(value)
+            elif obs_type == 'pm2_5_unbc_aqi':
+                value = AQI.compute_pm2_5_aqi(AQI.compute_pm2_5_unbc(value))
+            elif obs_type == 'pm2_5_unbc_aqi_color':
+                value = AQI.compute_pm2_5_aqi_color(AQI.compute_pm2_5_aqi(AQI.compute_pm2_5_unbc(value)))
         t, g = weewx.units.getStandardUnitType(std_unit_system, obs_type, aggregate_type)
         # Form the ValueTuple and return it:
         log.debug('get_aggregate(%s, %s, %s, aggregate:%s, select_stmt: %s, returning %s)' % (
