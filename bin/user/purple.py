@@ -31,7 +31,7 @@ from dateutil import tz
 from dateutil.parser import parse
 
 from dataclasses import dataclass
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
 import weeutil.weeutil
 import weewx
@@ -93,10 +93,9 @@ class Source:
 class Concentrations:
     timestamp       : float
     pm1_0           : float
-    pm2_5           : float
     pm10_0          : float
     pm2_5_cf_1      : float
-    pm2_5_cf_1_b    : float
+    pm2_5_cf_1_b    : Optional[float]
     current_temp_f  : int
     current_humidity: int
 
@@ -136,19 +135,18 @@ def get_concentrations(cfg: Configuration):
                 concentrations = Concentrations(
                     timestamp        = reading_ts,
                     pm1_0            = to_float(record['pm1_0_atm']),
-                    pm2_5            = to_float(record['pm2_5_atm']),
                     pm10_0           = to_float(record['pm10_0_atm']),
                     pm2_5_cf_1       = to_float(record['pm2_5_cf_1']),
-                    pm2_5_cf_1_b     = to_float(record['pm2_5_cf_1_b']),
+                    pm2_5_cf_1_b     = None, # If there is a second sensor, this will be updated below.
                     current_temp_f   = to_int(record['current_temp_f']),
                     current_humidity = to_int(record['current_humidity']),
                 )
                 # If there is a 'b' sensor, add it in and average the readings
                 log.debug('get_concentrations: concentrations BEFORE averaing in b reading: %s' % concentrations)
                 if 'pm1_0_atm_b' in record:
-                    concentrations.pm1_0      = (concentrations.pm1_0  + to_float(record['pm1_0_atm_b'])) / 2.0
-                    concentrations.pm2_5      = (concentrations.pm2_5  + to_float(record['pm2_5_atm_b'])) / 2.0
-                    concentrations.pm10_0     = (concentrations.pm10_0 + to_float(record['pm10_0_atm_b'])) / 2.0
+                    concentrations.pm1_0        = (concentrations.pm1_0  + to_float(record['pm1_0_atm_b'])) / 2.0
+                    concentrations.pm2_5_cf_1_b = to_float(record['pm2_5_cf_1_b'])
+                    concentrations.pm10_0       = (concentrations.pm10_0 + to_float(record['pm10_0_atm_b'])) / 2.0
                 log.debug('get_concentrations: concentrations: %s' % concentrations)
                 return concentrations
     log.error('Could not get concentrations from any source.')
@@ -333,16 +331,20 @@ class Purple(StdService):
                     self.cfg.archive_interval >= time.time():
                 # Insert pm1_0, pm2_5, pm10_0, aqi and aqic into loop packet.
                 event.packet['pm1_0'] = self.cfg.concentrations.pm1_0
+                if self.cfg.concentrations.pm2_5_cf_1_b is not None:
+                    b_reading = self.cfg.concentrations.pm2_5_cf_1_b
+                else:
+                    b_reading = self.cfg.concentrations.pm2_5_cf_1 # Dup A sensor reading
                 event.packet['pm2_5'] = AQI.compute_pm2_5_us_epa_correction(
-                        self.cfg.concentrations.pm2_5_cf_1, self.cfg.concentrations.pm2_5_cf_1_b,
+                        self.cfg.concentrations.pm2_5_cf_1, b_reading,
                         self.cfg.concentrations.current_humidity, self.cfg.concentrations.current_temp_f)
                 event.packet['pm10_0'] = self.cfg.concentrations.pm10_0
                 event.packet['pm2_5_aqi'] = AQI.compute_pm2_5_aqi(event.packet['pm2_5'])
                 event.packet['pm2_5_aqi_color'] = AQI.compute_pm2_5_aqi_color(event.packet['pm2_5_aqi'])
                 log.debug('Time of reading being inserted: %s' % timestamp_to_string(self.cfg.concentrations.timestamp))
-                log.debug('Inserted packet[pm1_0]: %f into packet.' % self.cfg.concentrations.pm1_0)
-                log.debug('Inserted packet[pm2_5]: %f into packet.' % self.cfg.concentrations.pm2_5)
-                log.debug('Inserted packet[pm10_0]: %f into packet.' % self.cfg.concentrations.pm10_0)
+                log.debug('Inserted packet[pm1_0]: %f into packet.' % event.packet['pm1_0'])
+                log.debug('Inserted packet[pm2_5]: %f into packet.' % event.packet['pm2_5'])
+                log.debug('Inserted packet[pm10_0]: %f into packet.' % event.packet['pm10_0'])
             else:
                 log.error('Found no fresh concentrations to insert.')
 
