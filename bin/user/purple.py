@@ -47,7 +47,7 @@ from weewx.engine import StdService
 
 log = logging.getLogger(__name__)
 
-WEEWX_PURPLE_VERSION = "2.1.1"
+WEEWX_PURPLE_VERSION = "3.0"
 
 if sys.version_info[0] < 3 or (sys.version_info[0] == 3 and sys.version_info[1] < 7):
     raise weewx.UnsupportedFeature(
@@ -69,22 +69,12 @@ weewx.units.MetricWXUnits['air_quality_color'] = 'aqi_color'
 
 weewx.units.default_unit_label_dict['pm2_5_aqi']  = ' AQI'
 weewx.units.default_unit_label_dict['pm2_5_aqi_color'] = ' RGB'
-weewx.units.default_unit_label_dict['pm2_5_lrapa_aqi']  = ' AQI'
-weewx.units.default_unit_label_dict['pm2_5_lrapa_aqi_color'] = ' RGB'
-weewx.units.default_unit_label_dict['pm2_5_unbc_aqi']  = ' AQI'
-weewx.units.default_unit_label_dict['pm2_5_unbc_aqi_color'] = ' RGB'
 
 weewx.units.default_unit_format_dict['aqi']  = '%d'
 weewx.units.default_unit_format_dict['aqi_color'] = '%d'
 
 weewx.units.obs_group_dict['pm2_5_aqi'] = 'air_quality_index'
 weewx.units.obs_group_dict['pm2_5_aqi_color'] = 'air_quality_color'
-weewx.units.obs_group_dict['pm2_5_lrapa'] = 'group_concentration'
-weewx.units.obs_group_dict['pm2_5_lrapa_aqi'] = 'air_quality_index'
-weewx.units.obs_group_dict['pm2_5_lrapa_aqi_color'] = 'air_quality_color'
-weewx.units.obs_group_dict['pm2_5_unbc'] = 'group_concentration'
-weewx.units.obs_group_dict['pm2_5_unbc_aqi'] = 'air_quality_index'
-weewx.units.obs_group_dict['pm2_5_unbc_aqi_color'] = 'air_quality_color'
 
 class Source:
     def __init__(self, config_dict, name, is_proxy):
@@ -101,10 +91,14 @@ class Source:
 
 @dataclass
 class Concentrations:
-    timestamp: float
-    pm1_0     : float
-    pm2_5     : float
-    pm10_0    : float
+    timestamp       : float
+    pm1_0           : float
+    pm2_5           : float
+    pm10_0          : float
+    pm2_5_cf_1      : float
+    pm2_5_cf_1_b    : float
+    current_temp_f  : int
+    current_humidity: int
 
 @dataclass
 class Configuration:
@@ -140,10 +134,14 @@ def get_concentrations(cfg: Configuration):
                         source.hostname, source.port, age_of_reading))
                     continue
                 concentrations = Concentrations(
-                    timestamp  = reading_ts,
-                    pm1_0      = to_float(record['pm1_0_atm']),
-                    pm2_5      = to_float(record['pm2_5_atm']),
-                    pm10_0     = to_float(record['pm10_0_atm']),
+                    timestamp        = reading_ts,
+                    pm1_0            = to_float(record['pm1_0_atm']),
+                    pm2_5            = to_float(record['pm2_5_atm']),
+                    pm10_0           = to_float(record['pm10_0_atm']),
+                    pm2_5_cf_1       = to_float(record['pm2_5_cf_1']),
+                    pm2_5_cf_1_b     = to_float(record['pm2_5_cf_1_b']),
+                    current_temp_f   = to_int(record['current_temp_f']),
+                    current_humidity = to_int(record['current_humidity']),
                 )
                 # If there is a 'b' sensor, add it in and average the readings
                 log.debug('get_concentrations: concentrations BEFORE averaing in b reading: %s' % concentrations)
@@ -259,9 +257,9 @@ def populate_record(ts, j):
             missed.append(key)
             return None
 
-    record['purple_temperature'] = get_and_update_missed('current_temp_f')
-    record['purple_humidity'] = get_and_update_missed('current_humidity')
-    record['purple_dewpoint'] = get_and_update_missed('current_dewpoint_f')
+    record['current_temp_f'] = get_and_update_missed('current_temp_f')
+    record['current_humidity'] = get_and_update_missed('current_humidity')
+    record['current_dewpoint_f'] = get_and_update_missed('current_dewpoint_f')
 
     pressure = get_and_update_missed('pressure')
     if pressure is not None:
@@ -335,16 +333,12 @@ class Purple(StdService):
                     self.cfg.archive_interval >= time.time():
                 # Insert pm1_0, pm2_5, pm10_0, aqi and aqic into loop packet.
                 event.packet['pm1_0'] = self.cfg.concentrations.pm1_0
-                event.packet['pm2_5'] = self.cfg.concentrations.pm2_5
+                event.packet['pm2_5'] = AQI.compute_pm2_5_us_epa_correction(
+                        self.cfg.concentrations.pm2_5_cf_1, self.cfg.concentrations.pm2_5_cf_1_b,
+                        self.cfg.concentrations.current_humidity, self.cfg.concentrations.current_temp_f)
                 event.packet['pm10_0'] = self.cfg.concentrations.pm10_0
                 event.packet['pm2_5_aqi'] = AQI.compute_pm2_5_aqi(event.packet['pm2_5'])
                 event.packet['pm2_5_aqi_color'] = AQI.compute_pm2_5_aqi_color(event.packet['pm2_5_aqi'])
-                event.packet['pm2_5_lrapa'] = AQI.compute_pm2_5_lrapa(event.packet['pm2_5'])
-                event.packet['pm2_5_lrapa_aqi'] = AQI.compute_pm2_5_aqi(event.packet['pm2_5_lrapa'])
-                event.packet['pm2_5_lrapa_aqi_color'] = AQI.compute_pm2_5_aqi_color(event.packet['pm2_5_lrapa_aqi'])
-                event.packet['pm2_5_unbc'] = AQI.compute_pm2_5_unbc(event.packet['pm2_5'])
-                event.packet['pm2_5_unbc_aqi'] = AQI.compute_pm2_5_aqi(event.packet['pm2_5_unbc'])
-                event.packet['pm2_5_unbc_aqi_color'] = AQI.compute_pm2_5_aqi_color(event.packet['pm2_5_unbc_aqi'])
                 log.debug('Time of reading being inserted: %s' % timestamp_to_string(self.cfg.concentrations.timestamp))
                 log.debug('Inserted packet[pm1_0]: %f into packet.' % self.cfg.concentrations.pm1_0)
                 log.debug('Inserted packet[pm2_5]: %f into packet.' % self.cfg.concentrations.pm2_5)
@@ -517,41 +511,16 @@ class AQI(weewx.xtypes.XType):
         else:
             return 128 << 16                # Maroon
 
-    def compute_pm2_5_lrapa(pm2_5):
-        # https://www.lrapa.org/DocumentCenter/View/4147/PurpleAir-Correction-Summary
-        value = pm2_5 / 2 - 0.66
-        if value < 0:
-            value = 0
-        return value
-
-    def compute_pm2_5_unbc(pm2_5):
-        # 0 μg m⁻³:
-        # PM₂.₅ = PA
-        #
-        # 0+ - 20 μg m⁻³:
-        # PM₂.₅ = 0.6 x PA + 3.4
-        # 
-        # 20+ - 200 μg m⁻³:
-        # PM₂.₅ = 0.6 x PA + 2.5
-        # 
-        # 200+ μg m⁻³:
-        # PM₂.₅ = 1.6 x PA - 194
-        if pm2_5 == 0:
-            value = pm2_5
-        elif pm2_5 <= 20:
-            value = 0.6 * pm2_5 + 3.4
-        elif pm2_5 <= 200:
-            value = 0.6 * pm2_5 + 2.5
-        else:
-            value = 1.6 * pm2_5 - 194
-        return value
+    @staticmethod
+    def compute_pm2_5_us_epa_correction(pm2_5_cf_1: float, pm2_5_cf_1_b: float, current_humidity: int, current_temp_f: int) -> float:
+        # PM2.5=0.541*PA_cf1(avgAB)-0.0618*RH +0.00534*T +3.634
+        val = 0.541 * (pm2_5_cf_1 + pm2_5_cf_1_b) / 2.0 - 0.0618 * current_humidity + 0.00534 * current_temp_f + 3.634
+        return val if val >= 0.0 else 0.0
 
     @staticmethod
     def get_scalar(obs_type, record, db_manager=None):
         log.debug('get_scalar(%s)' % obs_type)
-        if obs_type not in [ 'pm2_5_aqi', 'pm2_5_aqi_color', 'pm2_5_lrapa',
-                             'pm2_5_lrapa_aqi', 'pm2_5_lrapa_aqi_color',
-                             'pm2_5_unbc', 'pm2_5_unbc_aqi', 'pm2_5_unbc_aqi_color' ]:
+        if obs_type not in [ 'pm2_5_aqi', 'pm2_5_aqi_color' ]:
             raise weewx.UnknownType(obs_type)
         log.debug('get_scalar(%s)' % obs_type)
         if record is None:
@@ -569,18 +538,6 @@ class AQI(weewx.xtypes.XType):
                 value = AQI.compute_pm2_5_aqi(pm2_5)
             if obs_type == 'pm2_5_aqi_color':
                 value = AQI.compute_pm2_5_aqi_color(AQI.compute_pm2_5_aqi(pm2_5))
-            elif obs_type == 'pm2_5_lrapa':
-                value = AQI.compute_pm2_5_lrapa(pm2_5)
-            elif obs_type == 'pm2_5_lrapa_aqi':
-                value = AQI.compute_pm2_5_aqi(AQI.compute_pm2_5_lrapa(pm2_5))
-            elif obs_type == 'pm2_5_lrapa_aqi_color':
-                value = AQI.compute_pm2_5_aqi_color(AQI.compute_pm2_5_aqi(AQI.compute_pm2_5_lrapa(pm2_5)))
-            elif obs_type == 'pm2_5_unbc':
-                value = AQI.compute_pm2_5_unbc(pm2_5)
-            elif obs_type == 'pm2_5_unbc_aqi':
-                value = AQI.compute_pm2_5_aqi(AQI.compute_pm2_5_unbc(pm2_5))
-            elif obs_type == 'pm2_5_unbc_aqi_color':
-                value = AQI.compute_pm2_5_aqi_color(AQI.compute_pm2_5_aqi(AQI.compute_pm2_5_unbc(pm2_5)))
             t, g = weewx.units.getStandardUnitType(record['usUnits'], obs_type)
             # Form the ValueTuple and return it:
             return weewx.units.ValueTuple(value, t, g)
@@ -593,9 +550,7 @@ class AQI(weewx.xtypes.XType):
         """Get a series, possibly with aggregation.
         """
 
-        if obs_type not in [ 'pm2_5_aqi', 'pm2_5_aqi_color', 'pm2_5_lrapa',
-                             'pm2_5_lrapa_aqi', 'pm2_5_lrapa_aqi_color',
-                             'pm2_5_unbc', 'pm2_5_unbc_aqi', 'pm2_5_unbc_aqi_color' ]:
+        if obs_type not in [ 'pm2_5_aqi', 'pm2_5_aqi_color' ]:
             raise weewx.UnknownType(obs_type)
 
         log.debug('get_series(%s, %s, %s, aggregate:%s, aggregate_interval:%s)' % (
@@ -632,18 +587,6 @@ class AQI(weewx.xtypes.XType):
                     value = AQI.compute_pm2_5_aqi(pm2_5)
                 if obs_type == 'pm2_5_aqi_color':
                     value = AQI.compute_pm2_5_aqi_color(AQI.compute_pm2_5_aqi(pm2_5))
-                elif obs_type == 'pm2_5_lrapa':
-                    value = AQI.compute_pm2_5_lrapa(pm2_5)
-                elif obs_type == 'pm2_5_lrapa_aqi':
-                    value = AQI.compute_pm2_5_aqi(AQI.compute_pm2_5_lrapa(pm2_5))
-                elif obs_type == 'pm2_5_lrapa_aqi_color':
-                    value = AQI.compute_pm2_5_aqi_color(AQI.compute_pm2_5_aqi(AQI.compute_pm2_5_lrapa(pm2_5)))
-                elif obs_type == 'pm2_5_unbc':
-                    value = AQI.compute_pm2_5_unbc(pm2_5)
-                elif obs_type == 'pm2_5_unbc_aqi':
-                    value = AQI.compute_pm2_5_aqi(AQI.compute_pm2_5_unbc(pm2_5))
-                elif obs_type == 'pm2_5_unbc_aqi_color':
-                    value = AQI.compute_pm2_5_aqi_color(AQI.compute_pm2_5_aqi(AQI.compute_pm2_5_unbc(pm2_5)))
                 log.debug('get_series(%s): %s - %s - %s' % (obs_type,
                     timestamp_to_string(ts - interval * 60),
                     timestamp_to_string(ts), value))
@@ -678,9 +621,7 @@ class AQI(weewx.xtypes.XType):
 
         returns: A ValueTuple containing the result.
         """
-        if obs_type not in [ 'pm2_5_aqi', 'pm2_5_aqi_color', 'pm2_5_lrapa',
-                             'pm2_5_lrapa_aqi', 'pm2_5_lrapa_aqi_color',
-                             'pm2_5_unbc', 'pm2_5_unbc_aqi', 'pm2_5_unbc_aqi_color' ]:
+        if obs_type not in [ 'pm2_5_aqi', 'pm2_5_aqi_color' ]:
             raise weewx.UnknownType(obs_type)
 
         log.debug('get_aggregate(%s, %s, %s, aggregate:%s)' % (
@@ -713,18 +654,6 @@ class AQI(weewx.xtypes.XType):
                 value = AQI.compute_pm2_5_aqi(value)
             if obs_type == 'pm2_5_aqi_color':
                 value = AQI.compute_pm2_5_aqi_color(AQI.compute_pm2_5_aqi(value))
-            elif obs_type == 'pm2_5_lrapa':
-                value = AQI.compute_pm2_5_lrapa(value)
-            elif obs_type == 'pm2_5_lrapa_aqi':
-                value = AQI.compute_pm2_5_aqi(AQI.compute_pm2_5_lrapa(value))
-            elif obs_type == 'pm2_5_lrapa_aqi_color':
-                value = AQI.compute_pm2_5_aqi_color(AQI.compute_pm2_5_aqi(AQI.compute_pm2_5_lrapa(value)))
-            elif obs_type == 'pm2_5_unbc':
-                value = AQI.compute_pm2_5_unbc(value)
-            elif obs_type == 'pm2_5_unbc_aqi':
-                value = AQI.compute_pm2_5_aqi(AQI.compute_pm2_5_unbc(value))
-            elif obs_type == 'pm2_5_unbc_aqi_color':
-                value = AQI.compute_pm2_5_aqi_color(AQI.compute_pm2_5_aqi(AQI.compute_pm2_5_unbc(value)))
         t, g = weewx.units.getStandardUnitType(std_unit_system, obs_type, aggregate_type)
         # Form the ValueTuple and return it:
         log.debug('get_aggregate(%s, %s, %s, aggregate:%s, select_stmt: %s, returning %s)' % (

@@ -74,7 +74,6 @@ If you don't meet the following requirements, don't install this extension.
 
    ```
    [Purple]
-       data_binding = purple_binding
        [[Sensor]]
            enable = true
            hostname = purple-air
