@@ -1,12 +1,15 @@
 weewx-purple change history
 ---------------------------
 
-3.0 10/??/2020
+3.0 10/31/2020
 --------------
-1. Switch to using new US EPA correction for PM2.5.  See:
+1. Switch to using the new US EPA correction for PM2.5.  See:
    (https://cfpub.epa.gov/si/si_public_file_download.cfm?p_download_id=539905&Lab=CEMM)
    This correction is always applied.  The LRAPA and UNBC corrections have
-   been removed.  (Note: the UNBC correction was never in a release.)
+   been removed.
+
+   If the user wants access to raw PM2.5; or to the LRAPA and UNBC corrections,
+   do NOT upgrade to 3.0.
 
 2.1.1 08/30/2020
 ----------------
