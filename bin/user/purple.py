@@ -329,22 +329,30 @@ class Purple(StdService):
                     self.cfg.concentrations.timestamp is not None and \
                     self.cfg.concentrations.timestamp + \
                     self.cfg.archive_interval >= time.time():
+                log.debug('Time of reading being inserted: %s' % timestamp_to_string(self.cfg.concentrations.timestamp))
                 # Insert pm1_0, pm2_5, pm10_0, aqi and aqic into loop packet.
-                event.packet['pm1_0'] = self.cfg.concentrations.pm1_0
+                if self.cfg.concentrations.pm1_0 is not None:
+                    event.packet['pm1_0'] = self.cfg.concentrations.pm1_0
+                    log.debug('Inserted packet[pm1_0]: %f into packet.' % event.packet['pm1_0'])
                 if self.cfg.concentrations.pm2_5_cf_1_b is not None:
                     b_reading = self.cfg.concentrations.pm2_5_cf_1_b
                 else:
                     b_reading = self.cfg.concentrations.pm2_5_cf_1 # Dup A sensor reading
-                event.packet['pm2_5'] = AQI.compute_pm2_5_us_epa_correction(
-                        self.cfg.concentrations.pm2_5_cf_1, b_reading,
-                        self.cfg.concentrations.current_humidity, self.cfg.concentrations.current_temp_f)
-                event.packet['pm10_0'] = self.cfg.concentrations.pm10_0
-                event.packet['pm2_5_aqi'] = AQI.compute_pm2_5_aqi(event.packet['pm2_5'])
-                event.packet['pm2_5_aqi_color'] = AQI.compute_pm2_5_aqi_color(event.packet['pm2_5_aqi'])
-                log.debug('Time of reading being inserted: %s' % timestamp_to_string(self.cfg.concentrations.timestamp))
-                log.debug('Inserted packet[pm1_0]: %f into packet.' % event.packet['pm1_0'])
-                log.debug('Inserted packet[pm2_5]: %f into packet.' % event.packet['pm2_5'])
-                log.debug('Inserted packet[pm10_0]: %f into packet.' % event.packet['pm10_0'])
+                if (self.cfg.concentrations.pm2_5_cf_1 is not None
+                        and b_reading is not None
+                        and self.cfg.concentrations.current_humidity is not None
+                        and self.cfg.concentrations.current_temp_f):
+                    event.packet['pm2_5'] = AQI.compute_pm2_5_us_epa_correction(
+                            self.cfg.concentrations.pm2_5_cf_1, b_reading,
+                            self.cfg.concentrations.current_humidity, self.cfg.concentrations.current_temp_f)
+                    log.debug('Inserted packet[pm2_5]: %f into packet.' % event.packet['pm2_5'])
+                if self.cfg.concentrations.pm10_0 is not None:
+                    event.packet['pm10_0'] = self.cfg.concentrations.pm10_0
+                    log.debug('Inserted packet[pm10_0]: %f into packet.' % event.packet['pm10_0'])
+                if 'pm2_5' in event.packet:
+                    event.packet['pm2_5_aqi'] = AQI.compute_pm2_5_aqi(event.packet['pm2_5'])
+                if 'pm2_5_aqi' in event.packet:
+                    event.packet['pm2_5_aqi_color'] = AQI.compute_pm2_5_aqi_color(event.packet['pm2_5_aqi'])
             else:
                 log.error('Found no fresh concentrations to insert.')
 
