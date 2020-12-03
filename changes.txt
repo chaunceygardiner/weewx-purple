@@ -1,6 +1,11 @@
 weewx-purple change history
 ---------------------------
 
+3.0.1 12/2/2020
+--------------
+Minor changes when dealing with unavailble values.
+Minor code cleanup.
+
 3.0 10/31/2020
 --------------
 1. Switch to using the new US EPA correction for PM2.5.  See:
