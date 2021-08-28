@@ -19,8 +19,9 @@ in WeeWX 4 that contains pm1_0, pm2_5 and pm10_0 columns.  With the weewx-purple
 extension, Loop records will be populated with pm1_0, pm2_5 and pm10_0 fields that
 correspond to PurpleAir's pm1_0_cf_1, pm2_5_cf_1 and pm10_cf_1 fields.
 
-Note: As of v3.0, this extension always applies the US EPA correction for PM2.5.  See:
-   (https://cfpub.epa.gov/si/si_public_file_download.cfm?p_download_id=539905&Lab=CEMM)
+Note: As of v3.0, this extension always applies the US EPA correction for PM2.5.  As of v3.1, the
+   correction has been updated to the 2021 version of that correction.  See:
+   (https://www.epa.gov/sites/default/files/2021-05/documents/toolsresourceswebinar_purpleairsmoke_210519b.pdf)
    The LRAPA and UNBC corrections have been removed (as well as the uncorrected
    PM2.5 value).
 

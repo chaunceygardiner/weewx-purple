@@ -1,6 +1,10 @@
 weewx-purple change history
 ---------------------------
 
+3.1 08/27/2021
+--------------
+Switch to 2021 US EPA Correction (see https://www.epa.gov/sites/default/files/2021-05/documents/toolsresourceswebinar_purpleairsmoke_210519b.pdf)
+
 3.0.2 03/23/2021
 --------------
 Fix broken labels for aqi and aqi_color observation types.

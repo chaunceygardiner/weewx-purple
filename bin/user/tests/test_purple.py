@@ -122,10 +122,25 @@ class PurpleTests(unittest.TestCase):
         self.assertEqual(user.purple.AQI.compute_pm2_5_aqi_color(500), 128 << 16)
 
     def test_compute_pm2_5_us_epa_correction(self):
-        # PM2.5=0.541*PA_cf1(avgAB)-0.0618*RH +0.00534*T +3.634
-        self.assertEqual(user.purple.AQI.compute_pm2_5_us_epa_correction(0.0, 0.0, 0, 0), 3.634)
-        pm2_5 = user.purple.AQI.compute_pm2_5_us_epa_correction(0.0, 0.0, 60, 80)
-        self.assertTrue(pm2_5 > 0.3531999 and pm2_5 < 0.3532)
+        # 2021 EPA Correction
+        # Low Concentration PAcf_1 ≤ 343 μg m-3  : PM2.5 = 0.52 x PAcf_1 - 0.086 x RH + 5.75
+        # High Concentration PAcf_1 > 343 μg m-3 : PM2.5 = 0.46 x PAcf_1 + 3.93 x 10**-4 x PAcf_1**2 + 2.97
+
+        # compute_pm2_5_us_epa_correction(pm2_5_cf_1: float, pm2_5_cf_1_b: float, current_humidity: int, current_temp_f: int)
+
+        # 0 concentration and 0 RH
+        self.assertEqual(user.purple.AQI.compute_pm2_5_us_epa_correction(0.0, 0.0, 0.0, 96), 5.75)
+
+        # 0 concentration and reasonable RH
+        self.assertEqual(user.purple.AQI.compute_pm2_5_us_epa_correction(0.0, 0.0, 21.0, 96.0), 3.944)
+
+        # Low concentration
+        pm2_5 = user.purple.AQI.compute_pm2_5_us_epa_correction(118.0, 98.0, 95.0, 20.0)
+        self.assertTrue(pm2_5 > 53.73 and pm2_5 < 53.75)
+
+        # High concentration
+        pm2_5 = user.purple.AQI.compute_pm2_5_us_epa_correction(395.0, 405.0, 95.0, 20.0)
+        self.assertTrue(pm2_5 > 249.84 and pm2_5 < 249.86)
 
 if __name__ == '__main__':
     unittest.main()
