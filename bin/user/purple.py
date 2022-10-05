@@ -474,6 +474,18 @@ class AQI(weewx.xtypes.XType):
                "WHERE dateTime > %(start)s AND dateTime <= %(stop)s AND pm2_5 IS NOT NULL)",
     }
 
+    day_boundary_avg_min_max_sql_dict = {
+        'usUnits': "SELECT usUnits from %(table_name)s ORDER BY dateTime DESC LIMIT 1;",
+        'avg'    : "SELECT sum(wsum) / sum(sumtime) FROM %(table_name)s%(pm2_5_summary_suffix)s "
+                   "WHERE dateTime >= %(start)s AND dateTime < %(stop)s ",
+        'min'    : "SELECT min FROM %(table_name)s%(pm2_5_summary_suffix)s "
+                   "WHERE dateTime >= %(start)s AND dateTime < %(stop)s "
+                   "ORDER BY min ASC LIMIT 1;",
+        'max'    : "SELECT max FROM %(table_name)s%(pm2_5_summary_suffix)s "
+                   "WHERE dateTime >= %(start)s AND dateTime < %(stop)s "
+                   "ORDER BY max DESC LIMIT 1;",
+    }
+
     @staticmethod
     def compute_pm2_5_aqi(pm2_5):
         #             U.S. EPA PM2.5 AQI
@@ -514,7 +526,7 @@ class AQI(weewx.xtypes.XType):
             return (255 << 16) + (255 << 8) # Yellow
         elif pm2_5_aqi <=  150:
             return (255 << 16) + (140 << 8) # Orange
-        elif pm2_5_aqi <= 200: 
+        elif pm2_5_aqi <= 200:
             return 255 << 16                # Red
         elif pm2_5_aqi <= 300:
             return (128 << 16) + 128        # Purple
@@ -661,13 +673,31 @@ class AQI(weewx.xtypes.XType):
         interpolation_dict = {
             'start': timespan.start,
             'stop': timespan.stop,
-            'table_name': db_manager.table_name
+            'table_name': db_manager.table_name,
+            'pm2_5_summary_suffix': '_day_pm2_5'
         }
 
-        select_stmt = AQI.agg_sql_dict[aggregate_type] % interpolation_dict
+        on_day_boundary = (timespan.stop - timespan.start) % (24 * 3600) == 0
+        log.debug('day_boundary stop: %r start: %r delta: %r modulo: %d on_day_boundary: %s' % (timespan.stop , timespan.start, (timespan.stop - timespan.start), ((timespan.stop - timespan.start) % 3600), on_day_boundary))
+        if aggregate_type in list(AQI.day_boundary_avg_min_max_sql_dict.keys()) and on_day_boundary:
+            select_stmt = AQI.day_boundary_avg_min_max_sql_dict[aggregate_type] % interpolation_dict
+            select_usunits_stmt = AQI.day_boundary_avg_min_max_sql_dict['usUnits'] % interpolation_dict
+            need_usUnits = True
+        else:
+            select_stmt = AQI.agg_sql_dict[aggregate_type] % interpolation_dict
+            need_usUnits = False
+        if need_usUnits:
+            row = db_manager.getSql(select_usunits_stmt)
+            if row:
+                std_unit_system, = row
+            else:
+                std_unit_system = None
         row = db_manager.getSql(select_stmt)
         if row:
-            value, std_unit_system = row
+            if need_usUnits:
+                value, = row
+            else:
+                value, std_unit_system = row
         else:
             value = None
             std_unit_system = None
