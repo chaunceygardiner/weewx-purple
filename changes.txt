@@ -1,6 +1,9 @@
 weewx-purple change history
 ---------------------------
 
+3.2 10/07/2022
+When computing AQI, round to nearest integer (rather than truncate).
+
 3.1 08/27/2021
 --------------
 Switch to 2021 US EPA Correction (see https://www.epa.gov/sites/default/files/2021-05/documents/toolsresourceswebinar_purpleairsmoke_210519b.pdf)
