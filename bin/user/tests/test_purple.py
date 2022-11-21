@@ -40,13 +40,13 @@ class PurpleTests(unittest.TestCase):
         # Moderate
         self.assertEqual(user.purple.AQI.compute_pm2_5_aqi(12.1),  51)
         aqi = user.purple.AQI.compute_pm2_5_aqi(23.7)
-        self.assertTrue(aqi > 75.3948 and aqi < 75.3949)
+        self.assertEqual(aqi, 75)
         self.assertEqual(user.purple.AQI.compute_pm2_5_aqi(35.499), 100)
 
         # USG
         self.assertEqual(user.purple.AQI.compute_pm2_5_aqi(35.5), 101)
         aqi = user.purple.AQI.compute_pm2_5_aqi(45.4)
-        self.assertTrue(aqi > 125.3768 and aqi < 125.3769)
+        self.assertEqual(aqi, 125)
         self.assertEqual(user.purple.AQI.compute_pm2_5_aqi(55.4), 150)
 
         # Unhealthy
@@ -58,19 +58,19 @@ class PurpleTests(unittest.TestCase):
         # Very Unhealthy
         self.assertEqual(user.purple.AQI.compute_pm2_5_aqi(150.5), 201)
         aqi = user.purple.AQI.compute_pm2_5_aqi(200.4)
-        self.assertTrue(aqi > 250.4504 and aqi < 250.4505)
+        self.assertEqual(aqi, 250)
         self.assertEqual(user.purple.AQI.compute_pm2_5_aqi(250.4), 300)
 
         # Harzadous
         self.assertEqual(user.purple.AQI.compute_pm2_5_aqi(250.5), 301)
         aqi = user.purple.AQI.compute_pm2_5_aqi(300.4)
-        self.assertTrue(aqi > 350.4504 and aqi < 350.4505)
+        self.assertEqual(aqi, 350)
         self.assertEqual(user.purple.AQI.compute_pm2_5_aqi(350.4), 400)
 
         # Harzadous
         self.assertEqual(user.purple.AQI.compute_pm2_5_aqi(350.5), 401)
         aqi = user.purple.AQI.compute_pm2_5_aqi(425.45)
-        self.assertTrue(aqi > 450.4 and aqi < 450.6)
+        self.assertEqual(aqi, 450)
         self.assertEqual(user.purple.AQI.compute_pm2_5_aqi(500.4), 500)
 
     #             U.S. EPA PM2.5 AQI
@@ -136,11 +136,11 @@ class PurpleTests(unittest.TestCase):
 
         # Low concentration
         pm2_5 = user.purple.AQI.compute_pm2_5_us_epa_correction(118.0, 98.0, 95.0, 20.0)
-        self.assertTrue(pm2_5 > 53.73 and pm2_5 < 53.75)
+        self.assertAlmostEqual(pm2_5, 53.74)
 
         # High concentration
         pm2_5 = user.purple.AQI.compute_pm2_5_us_epa_correction(395.0, 405.0, 95.0, 20.0)
-        self.assertTrue(pm2_5 > 249.84 and pm2_5 < 249.86)
+        self.assertAlmostEqual(pm2_5, 249.85)
 
 if __name__ == '__main__':
     unittest.main()
