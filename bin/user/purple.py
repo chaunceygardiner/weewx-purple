@@ -47,7 +47,7 @@ from weewx.engine import StdService
 
 log = logging.getLogger(__name__)
 
-WEEWX_PURPLE_VERSION = "3.2"
+WEEWX_PURPLE_VERSION = "3.3"
 
 if sys.version_info[0] < 3 or (sys.version_info[0] == 3 and sys.version_info[1] < 7):
     raise weewx.UnsupportedFeature(
@@ -103,7 +103,6 @@ class Concentrations:
 class Configuration:
     lock            : threading.Lock
     concentrations  : Concentrations # Controlled by lock
-    archive_interval: int            # Immutable
     archive_delay   : int            # Immutable
     poll_interval   : int            # Immutable
     sources         : List[Source]   # Immutable
@@ -122,13 +121,12 @@ def get_concentrations(cfg: Configuration):
             record = collect_data(source.hostname,
                                   source.port,
                                   source.timeout,
-                                  cfg.archive_interval,
                                   source.is_proxy)
             if record is not None:
                 log.debug('get_concentrations: source: %s' % record)
                 reading_ts = to_int(record['dateTime'])
                 age_of_reading = time.time() - reading_ts
-                if age_of_reading > cfg.archive_interval:
+                if age_of_reading > 120.0:
                     log.info('Reading from %s:%d is old: %d seconds.' % (
                         source.hostname, source.port, age_of_reading))
                     continue
@@ -199,7 +197,7 @@ def is_sane(j: Dict[str, Any]) -> bool:
 
     return True
 
-def collect_data(hostname, port, timeout, archive_interval, proxy = False):
+def collect_data(hostname, port, timeout, proxy = False):
 
     j = None
     url = 'http://%s:%s/json' % (hostname, port)
@@ -221,9 +219,9 @@ def collect_data(hostname, port, timeout, archive_interval, proxy = False):
             time_of_reading = datetime_from_reading(j['DateTime'])
             # If proxy, the reading could be old.
             if proxy:
-                #Check that it's not older than now - arcint
+                #Check that it's not older than 2 min.
                 age_of_reading = utc_now() - time_of_reading
-                if age_of_reading.seconds > archive_interval:
+                if age_of_reading.seconds > 120:
                     # Nothing current, will have to read directly for PurpleAir device.
                     log.info('Ignoring proxy reading--age: %d seconds.'
                              % age_of_reading.seconds)
@@ -292,7 +290,6 @@ class Purple(StdService):
         self.cfg = Configuration(
             lock             = threading.Lock(),
             concentrations   = None,
-            archive_interval = int(config_dict['StdArchive']['archive_interval']),
             archive_delay    = to_int(config_dict['StdArchive'].get('archive_delay', 15)),
             poll_interval    = 5,
             sources          = Purple.configure_sources(self.config_dict))
@@ -327,8 +324,7 @@ class Purple(StdService):
             log.debug('new_loop_packet: self.cfg.concentrations: %s' % self.cfg.concentrations)
             if self.cfg.concentrations is not None and \
                     self.cfg.concentrations.timestamp is not None and \
-                    self.cfg.concentrations.timestamp + \
-                    self.cfg.archive_interval >= time.time():
+                    self.cfg.concentrations.timestamp + 120 >= time.time():
                 log.debug('Time of reading being inserted: %s' % timestamp_to_string(self.cfg.concentrations.timestamp))
                 # Insert pm1_0, pm2_5, pm10_0, aqi and aqic into loop packet.
                 if self.cfg.concentrations.pm1_0 is not None:
@@ -746,7 +742,7 @@ if __name__ == "__main__":
 
     def test_collector(hostname, port):
         while True:
-            print(collect_data(hostname, port, 10, 300))
+            print(collect_data(hostname, port, 10))
             time.sleep(5)
 
     def test_is_sane():
