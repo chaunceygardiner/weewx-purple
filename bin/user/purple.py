@@ -168,6 +168,9 @@ def is_type(j: Dict[str, Any], t, names: List[str]) -> bool:
         return False
 
 def is_sane(j: Dict[str, Any]) -> bool:
+    if 'DateTime' not in j:
+        log.info('DateTime not found in: %r' % j)
+        return False
     time_of_reading = datetime_from_reading(j['DateTime'])
     if not isinstance(time_of_reading, datetime.datetime):
         log.info('DateTime is not an instance of datetime: %s' % j['DateTime'])
@@ -211,11 +214,11 @@ def collect_data(hostname, port, timeout, archive_interval, proxy = False):
             # convert to json
             j = r.json()
             log.debug('collect_data: json returned from %s is: %r' % (hostname, j))
-            time_of_reading = datetime_from_reading(j['DateTime'])
             # Check for sanity
             if not is_sane(j):
                 log.info('purpleair reading not sane: %s' % j)
                 return None
+            time_of_reading = datetime_from_reading(j['DateTime'])
             # If proxy, the reading could be old.
             if proxy:
                 #Check that it's not older than now - arcint
