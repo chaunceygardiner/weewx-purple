@@ -199,7 +199,7 @@ def is_sane(j: Dict[str, Any]) -> bool:
 def collect_data(hostname, port, timeout, archive_interval, proxy = False):
 
     j = None
-    url = 'http://%s:%s/json?live=true' % (hostname, port)
+    url = 'http://%s:%s/json' % (hostname, port)
 
     try:
         # fetch data
