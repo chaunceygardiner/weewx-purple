@@ -47,6 +47,7 @@ class PurpleInstaller(ExtensionInstaller):
                     },
                 },
                 'Purple': {
+                    'poll_secs'          : 15,
                     'Proxy1'   : {
                         'enable'         : False,
                         'hostname'       : 'proxy1',

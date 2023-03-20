@@ -103,39 +103,40 @@ If you don't meet the following requirements, don't install this extension.
 
    ```
    [Purple]
+       poll_secs = 15
        [[Sensor]]
            enable = true
            hostname = purple-air
            port = 80
-           timeout = 15
+           timeout = 10
        [[Sensor2]]
            enable = false
            hostname = purple-air2
            port = 80
-           timeout = 15
+           timeout = 10
        [[Proxy1]]
            enable = false
            hostname = proxy
            port = 8000
-           timeout = 5
+           timeout = 10
            starup_timeout = 60
        [[Proxy2]]
            enable = false
            hostname = proxy2
            port = 8000
-           timeout = 5
+           timeout = 10
            starup_timeout = 60
        [[Proxy3]]
            enable = false
            hostname = proxy3
            port = 8000
-           timeout = 5
+           timeout = 10
            starup_timeout = 60
        [[Proxy4]]
            enable = false
            hostname = proxy4
            port = 8000
-           timeout = 5
+           timeout = 10
            starup_timeout = 60
    ```
 

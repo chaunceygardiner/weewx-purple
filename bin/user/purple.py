@@ -104,7 +104,7 @@ class Configuration:
     lock            : threading.Lock
     concentrations  : Concentrations # Controlled by lock
     archive_delay   : int            # Immutable
-    poll_interval   : int            # Immutable
+    poll_secs       : int            # Immutable
     sources         : List[Source]   # Immutable
 
 def datetime_from_reading(dt_str):
@@ -291,11 +291,12 @@ class Purple(StdService):
             lock             = threading.Lock(),
             concentrations   = None,
             archive_delay    = to_int(config_dict['StdArchive'].get('archive_delay', 15)),
-            poll_interval    = 5,
+            poll_secs        = to_int(self.config_dict.get('poll_secs', 15)),
             sources          = Purple.configure_sources(self.config_dict))
         with self.cfg.lock:
             self.cfg.concentrations = get_concentrations(self.cfg)
 
+        log.info('poll_secs: %d' % self.cfg.poll_secs)
         source_count = 0
         for source in self.cfg.sources:
             if source.enable:
@@ -437,8 +438,8 @@ class DevicePoller:
             if concentrations is not None:
                 with self.cfg.lock:
                     self.cfg.concentrations = concentrations
-            log.debug('poll_device: Sleeping for %d seconds.' % self.cfg.poll_interval)
-            time.sleep(self.cfg.poll_interval)
+            log.debug('poll_device: Sleeping for %d seconds.' % self.cfg.poll_secs)
+            time.sleep(self.cfg.poll_secs)
 
 class AQI(weewx.xtypes.XType):
     """
