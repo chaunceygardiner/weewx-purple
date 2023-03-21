@@ -31,7 +31,7 @@ from dateutil import tz
 from dateutil.parser import parse
 
 from dataclasses import dataclass
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 import weeutil.weeutil
 import weewx
@@ -126,7 +126,7 @@ def get_concentrations(cfg: Configuration):
                 log.debug('get_concentrations: source: %s' % record)
                 reading_ts = to_int(record['dateTime'])
                 age_of_reading = time.time() - reading_ts
-                if age_of_reading > 120.0:
+                if abs(age_of_reading) > 120.0:
                     log.info('Reading from %s:%d is old: %d seconds.' % (
                         source.hostname, source.port, age_of_reading))
                     continue
@@ -150,52 +150,53 @@ def get_concentrations(cfg: Configuration):
     log.error('Could not get concentrations from any source.')
     return None
 
-def is_type(j: Dict[str, Any], t, names: List[str]) -> bool:
+def check_type(j: Dict[str, Any], t, names: List[str]) -> Tuple[bool, str]:
     try:
         for name in names:
           x = j[name]
           if not isinstance(x, t):
-              log.info('%s is not an instance of %s: %s' % (name, t, j[name]))
-              return False
-        return True
+              return False, '%s is not an instance of %s: %s' % (name, t, j[name])
+        return True, ''
     except KeyError as e:
-        log.info('is_type: could not find key: %s' % e)
-        return False
+        return False, 'check_type: could not find key: %s' % e
     except Exception as e:
-        log.info('is_type: exception: %s' % e)
-        return False
+        return False, 'check_type: exception: %s' % e
 
-def is_sane(j: Dict[str, Any]) -> bool:
+def is_sane(j: Dict[str, Any]) -> Tuple[bool, str]:
     if 'DateTime' not in j:
-        log.info('DateTime not found in: %r' % j)
-        return False
+        return False, 'DateTime not found in: %r' % j
     time_of_reading = datetime_from_reading(j['DateTime'])
     if not isinstance(time_of_reading, datetime.datetime):
-        log.info('DateTime is not an instance of datetime: %s' % j['DateTime'])
-        return False
+        return False, 'DateTime is not an instance of datetime: %s' % j['DateTime']
 
-    if not is_type(j, int, ['current_temp_f','current_humidity','current_dewpoint_f']):
-        return False
+    ok, reason = check_type(j, int, ['current_temp_f','current_humidity','current_dewpoint_f'])
+    if not ok:
+        return False, reason
 
-    if not is_type(j, float, ['pressure']):
-        return False
+    ok, reason = check_type(j, float, ['pressure'])
+    if not ok:
+        return False, reason
 
     # Sensor A
-    if not is_type(j, float, ['pm1_0_cf_1','pm1_0_atm','p_0_3_um','pm2_5_cf_1',
-            'pm2_5_atm','p_0_5_um','pm10_0_cf_1','pm10_0_atm']):
-        return False
-    if not is_type(j, int, ['pm2.5_aqi']):
-        return False
+    ok, reason = check_type(j, float, ['pm1_0_cf_1','pm1_0_atm','p_0_3_um','pm2_5_cf_1',
+            'pm2_5_atm','p_0_5_um','pm10_0_cf_1','pm10_0_atm'])
+    if not ok:
+        return False, reason
+    ok, reason = check_type(j, int, ['pm2.5_aqi'])
+    if not ok:
+        return False, reason
 
     # Sensor B
     if 'pm2.5_aqi_b' in j:
-        if not is_type(j, float, ['pm1_0_cf_1_b','pm1_0_atm_b','p_0_3_um_b','pm2_5_cf_1_b',
-                'pm2_5_atm_b','p_0_5_um_b','pm10_0_cf_1_b','pm10_0_atm_b']):
-            return False
-        if not is_type(j, int, ['pm2.5_aqi_b']):
-            return False
+        ok, reason = check_type(j, float, ['pm1_0_cf_1_b','pm1_0_atm_b','p_0_3_um_b','pm2_5_cf_1_b',
+                'pm2_5_atm_b','p_0_5_um_b','pm10_0_cf_1_b','pm10_0_atm_b'])
+        if not ok:
+            return False, reason
+        ok, reason = check_type(j, int, ['pm2.5_aqi_b'])
+        if not ok:
+            return False, reason
 
-    return True
+    return True, ''
 
 def collect_data(hostname, port, timeout, proxy = False):
 
@@ -213,18 +214,19 @@ def collect_data(hostname, port, timeout, proxy = False):
             j = r.json()
             log.debug('collect_data: json returned from %s is: %r' % (hostname, j))
             # Check for sanity
-            if not is_sane(j):
-                log.info('purpleair reading not sane: %s' % j)
+            sane, reason = is_sane(j)
+            if not sane:
+                log.info('purpleair reading not sane, %s: %s' % (reason, j))
                 return None
             time_of_reading = datetime_from_reading(j['DateTime'])
             # If proxy, the reading could be old.
             if proxy:
                 #Check that it's not older than 2 min.
-                age_of_reading = utc_now() - time_of_reading
-                if age_of_reading.seconds > 120:
+                age_of_reading = utc_now().timestamp() - time_of_reading.timestamp()
+                if abs(age_of_reading) > 120:
                     # Nothing current, will have to read directly for PurpleAir device.
                     log.info('Ignoring proxy reading--age: %d seconds.'
-                             % age_of_reading.seconds)
+                             % age_of_reading)
                     j = None
     except Exception as e:
         log.info('collect_data: Attempt to fetch from: %s failed: %s.' % (hostname, e))
@@ -801,12 +803,16 @@ if __name__ == "__main__":
             '"p_1_0_um":37.50,"pm1_0_atm":3.60,"p_2_5_um":6.47,"pm2_5_atm":6.13,'
             '"p_5_0_um":0.77,"pm10_0_atm":6.80,"p_10_0_um":0.77}')
         j = json.loads(good_proxy)
-        assert(is_sane(j))
+        sane, _ = is_sane(j)
+        assert(sane)
         j = json.loads(good_device)
-        assert(is_sane(j))
+        sane, _ = is_sane(j)
+        assert(sane)
         j = json.loads(bad_1)
-        assert(not is_sane(j))
+        sane, _ = is_sane(j)
+        assert(not sane)
         j = json.loads(bad_2)
-        assert(not is_sane(j))
+        sane, _ = is_sane(j)
+        assert(not sane)
 
     main()
