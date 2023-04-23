@@ -82,12 +82,16 @@ If you don't meet the following requirements, don't install this extension.
   * Using WeeWX 4's new wview_extended schema.
   * Python 3.7 or greater
 
-1. Download the lastest release, weewx-purple-3.2.zip, from the
+1. Install python3's dateutil package.  On debian, that can be accomplished with:
+
+   `apt install python3-dateutil`
+
+1. Download the lastest release, weewx-purple-3.3.zip, from the
    [GitHub Repository](https://github.com/chaunceygardiner/weewx-purple).
 
 1. Run the following command.
 
-   `sudo /home/weewx/bin/wee_extension --install weewx-purple-3.2.zip`
+   `sudo /home/weewx/bin/wee_extension --install weewx-purple-3.3.zip`
 
    Note: this command assumes weewx is installed in /home/weewx.  If it's installed
    elsewhere, adjust the path of wee_extension accordingly.
