@@ -1,7 +1,13 @@
 weewx-purple change history
 ---------------------------
 
+3.3 04/23/2023
+--------------
+Add missing instruction in README to install python3-dateutil.
+Make poll interval (poll_secs) configurable (default: 15s).
+
 3.2 10/07/2022
+--------------
 When computing AQI, round to nearest integer (rather than truncate).
 
 3.1 08/27/2021
