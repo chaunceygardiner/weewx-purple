@@ -29,6 +29,7 @@ import time
 
 from dateutil import tz
 from dateutil.parser import parse
+from dateutil.parser import ParserError
 
 from dataclasses import dataclass
 from typing import Any, Dict, List, Optional, Tuple
@@ -47,7 +48,7 @@ from weewx.engine import StdService
 
 log = logging.getLogger(__name__)
 
-WEEWX_PURPLE_VERSION = "3.3"
+WEEWX_PURPLE_VERSION = "3.4"
 
 if sys.version_info[0] < 3 or (sys.version_info[0] == 3 and sys.version_info[1] < 7):
     raise weewx.UnsupportedFeature(
@@ -162,10 +163,19 @@ def check_type(j: Dict[str, Any], t, names: List[str]) -> Tuple[bool, str]:
     except Exception as e:
         return False, 'check_type: exception: %s' % e
 
+def exhibits_twenty_fold_delta(val_1: float, val_2: float) -> bool:
+    # If either value is zero, skip this check.
+    if val_1 == 0.0 or val_2 == 0.0:
+        return False
+    return (val_1 * 20.0) < val_2 or (val_2 * 20.0) < val_1
+
 def is_sane(j: Dict[str, Any]) -> Tuple[bool, str]:
     if 'DateTime' not in j:
         return False, 'DateTime not found in: %r' % j
-    time_of_reading = datetime_from_reading(j['DateTime'])
+    try:
+        time_of_reading = datetime_from_reading(j['DateTime'])
+    except ParserError:
+        return False, 'DateTime is not an instance of datetime: %s' % j['DateTime']
     if not isinstance(time_of_reading, datetime.datetime):
         return False, 'DateTime is not an instance of datetime: %s' % j['DateTime']
 
@@ -195,6 +205,13 @@ def is_sane(j: Dict[str, Any]) -> Tuple[bool, str]:
         ok, reason = check_type(j, int, ['pm2.5_aqi_b'])
         if not ok:
             return False, reason
+        # Check on agreement between the sensors
+        if exhibits_twenty_fold_delta(j['pm2_5_cf_1'], j['pm2_5_cf_1_b']):
+            return False, 'Sensors disagree wildly for pm2_5_cf_1'
+        if exhibits_twenty_fold_delta(j['pm1_0_cf_1'], j['pm1_0_cf_1_b']):
+            return False, 'Sensors disagree wildly for pm1_0_cf_1'
+        if exhibits_twenty_fold_delta(j['pm10_0_cf_1'], j['pm10_0_cf_1_b']):
+            return False, 'Sensors disagree wildly for pm10_0_cf_1'
 
     return True, ''
 

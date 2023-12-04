@@ -7,6 +7,8 @@
 import logging
 import unittest
 
+from typing import Any, Dict
+
 import weeutil.logger
 
 import user.purple
@@ -15,6 +17,77 @@ log = logging.getLogger(__name__)
 
 # Set up logging using the defaults.
 weeutil.logger.setup('test_config', {})
+
+VALID_PKT: Dict[str, Any] = {
+    "SensorId":"44:17:93:1:9d:3",
+    "DateTime":"2023/10/26T18:53:40z",
+    "Geo":"PurpleAir-9d3",
+    "Mem":20256,
+    "memfrag":15,
+    "memfb":17240,
+    "memcs":800,
+    "Id":57139,
+    "lat":37.431599,
+    "lon":-122.111000,
+    "Adc":0.05,
+    "loggingrate":15,
+    "place":"outside",
+    "version":"7.02",
+    "uptime":683681,
+    "rssi":-53,
+    "period":120,
+    "httpsuccess":11582,
+    "httpsends":11582,
+    "hardwareversion":"2.0",
+    "hardwarediscovered":"2.0+BME280+PMSX003-B+PMSX003-A",
+    "current_temp_f":69,
+    "current_humidity":35,
+    "current_dewpoint_f":40,
+    "pressure":1022.92,
+    "p25aqic_b":"rgb(19,230,0)",
+    "pm2.5_aqi_b":21,
+    "pm1_0_cf_1_b":3.00,
+    "p_0_3_um_b":771.00,
+    "pm2_5_cf_1_b":5.00,
+    "p_0_5_um_b":218.00,
+    "pm10_0_cf_1_b":6.00,
+    "p_1_0_um_b":27.00,
+    "pm1_0_atm_b":3.00,
+    "p_2_5_um_b":4.00,
+    "pm2_5_atm_b":5.00,
+    "p_5_0_um_b":2.00,
+    "pm10_0_atm_b":6.00,
+    "p_10_0_um_b":1.00,
+    "p25aqic":"rgb(19,230,0)",
+    "pm2.5_aqi":21,
+    "pm1_0_cf_1":3.00,
+    "p_0_3_um":639.00,
+    "pm2_5_cf_1":5.00,
+    "p_0_5_um":194.00,
+    "pm10_0_cf_1":5.00,
+    "p_1_0_um":40.00,
+    "pm1_0_atm":3.00,
+    "p_2_5_um":1.00,
+    "pm2_5_atm":5.00,
+    "p_5_0_um":0.00,
+    "pm10_0_atm":5.00,
+    "p_10_0_um":0.00,
+    "pa_latency":221,
+    "response":201,
+    "response_date":1698346362,
+    "latency":286,
+    "wlstate":"Connected",
+    "status_0":2,
+    "status_1":2,
+    "status_2":2,
+    "status_3":2,
+    "status_4":0,
+    "status_5":0,
+    "status_6":2,
+    "status_7":0,
+    "status_8":0,
+    "status_9":0,
+    "ssid":"ellagirldog"}
 
 class PurpleTests(unittest.TestCase):
     #             U.S. EPA PM2.5 AQI
@@ -141,6 +214,31 @@ class PurpleTests(unittest.TestCase):
         # High concentration
         pm2_5 = user.purple.AQI.compute_pm2_5_us_epa_correction(395.0, 405.0, 95.0, 20.0)
         self.assertAlmostEqual(pm2_5, 249.85)
+
+    def test_is_sane(self):
+        ok, reason = user.purple.is_sane(VALID_PKT)
+        self.assertTrue(ok, reason)
+
+        # Bad Date
+        bad_pkt= VALID_PKT.copy()
+        bad_pkt['DateTime'] = 'xyz'
+        ok, reason = user.purple.is_sane(bad_pkt)
+        self.assertFalse(ok)
+        self.assertEqual(reason, 'DateTime is not an instance of datetime: xyz')
+
+        # Bad Temp
+        bad_pkt = VALID_PKT.copy()
+        bad_pkt['current_temp_f'] = 'nan'
+        ok, reason = user.purple.is_sane(bad_pkt)
+        self.assertFalse(ok)
+        self.assertEqual(reason, "current_temp_f is not an instance of <class 'int'>: nan")
+
+        # Disagreeing Sensors
+        bad_pkt = VALID_PKT.copy()
+        bad_pkt['pm2_5_cf_1'] = 0.000001
+        ok, reason = user.purple.is_sane(bad_pkt)
+        self.assertFalse(ok, reason)
+        self.assertEqual(reason, 'Sensors disagree wildly for pm2_5_cf_1')
 
 if __name__ == '__main__':
     unittest.main()

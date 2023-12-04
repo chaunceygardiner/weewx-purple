@@ -1,6 +1,10 @@
 weewx-purple change history
 ---------------------------
 
+3.4 10/26/2023
+--------------
+Enhance sanity check to look for wild discrepancies between a and b sensors.
+
 3.3 04/23/2023
 --------------
 Add missing instruction in README to install python3-dateutil.
