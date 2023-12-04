@@ -48,7 +48,7 @@ from weewx.engine import StdService
 
 log = logging.getLogger(__name__)
 
-WEEWX_PURPLE_VERSION = "3.4"
+WEEWX_PURPLE_VERSION = "3.5"
 
 if sys.version_info[0] < 3 or (sys.version_info[0] == 3 and sys.version_info[1] < 7):
     raise weewx.UnsupportedFeature(
@@ -127,7 +127,11 @@ def get_concentrations(cfg: Configuration):
                 log.debug('get_concentrations: source: %s' % record)
                 reading_ts = to_int(record['dateTime'])
                 age_of_reading = time.time() - reading_ts
-                if abs(age_of_reading) > 120.0:
+                # Ignore old readings.  We can't reading of 120s or close to
+                # it because the reading will age before the next time
+                # concentrations are polled.  Reduce 120s by poll_secs plus
+                # a 5s buffer.
+                if abs(age_of_reading) > (120.0 - cfg.poll_secs - 5.0):
                     log.info('Reading from %s:%d is old: %d seconds.' % (
                         source.hostname, source.port, age_of_reading))
                     continue

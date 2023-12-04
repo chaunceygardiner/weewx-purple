@@ -1,6 +1,10 @@
 weewx-purple change history
 ---------------------------
 
+3.5 12/03/2023
+--------------
+Tweak check for old readings so readings don't age out before the next poll.
+
 3.4 10/26/2023
 --------------
 Enhance sanity check to look for wild discrepancies between a and b sensors.
