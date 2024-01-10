@@ -48,7 +48,7 @@ from weewx.engine import StdService
 
 log = logging.getLogger(__name__)
 
-WEEWX_PURPLE_VERSION = "3.5"
+WEEWX_PURPLE_VERSION = "3.6"
 
 if sys.version_info[0] < 3 or (sys.version_info[0] == 3 and sys.version_info[1] < 7):
     raise weewx.UnsupportedFeature(
@@ -237,7 +237,7 @@ def collect_data(hostname, port, timeout, proxy = False):
             # Check for sanity
             sane, reason = is_sane(j)
             if not sane:
-                log.info('purpleair reading not sane, %s: %s' % (reason, j))
+                log.info('purpleair reading from %s not sane, %s: %s' % (hostname, reason, j))
                 return None
             time_of_reading = datetime_from_reading(j['DateTime'])
             # If proxy, the reading could be old.
@@ -246,8 +246,8 @@ def collect_data(hostname, port, timeout, proxy = False):
                 age_of_reading = utc_now().timestamp() - time_of_reading.timestamp()
                 if abs(age_of_reading) > 120:
                     # Nothing current, will have to read directly for PurpleAir device.
-                    log.info('Ignoring proxy reading--age: %d seconds.'
-                             % age_of_reading)
+                    log.info('Ignoring proxy reading from %s--age: %d seconds.'
+                             % (hostname, age_of_reading))
                     j = None
     except Exception as e:
         log.info('collect_data: Attempt to fetch from: %s failed: %s.' % (hostname, e))
