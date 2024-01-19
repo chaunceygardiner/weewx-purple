@@ -48,7 +48,7 @@ from weewx.engine import StdService
 
 log = logging.getLogger(__name__)
 
-WEEWX_PURPLE_VERSION = "3.6"
+WEEWX_PURPLE_VERSION = "3.7"
 
 if sys.version_info[0] < 3 or (sys.version_info[0] == 3 and sys.version_info[1] < 7):
     raise weewx.UnsupportedFeature(
@@ -103,7 +103,7 @@ class Concentrations:
 @dataclass
 class Configuration:
     lock            : threading.Lock
-    concentrations  : Concentrations # Controlled by lock
+    concentrations  : Optional[Concentrations] # Controlled by lock
     archive_delay   : int            # Immutable
     poll_secs       : int            # Immutable
     sources         : List[Source]   # Immutable
@@ -129,10 +129,10 @@ def get_concentrations(cfg: Configuration):
                 age_of_reading = time.time() - reading_ts
                 # Ignore old readings.  We can't reading of 120s or close to
                 # it because the reading will age before the next time
-                # concentrations are polled.  Reduce 120s by poll_secs plus
-                # a 5s buffer.
+                # concentrations are polled.  Reduce 120s poll_secs by
+                # 5s (as a buffer).
                 if abs(age_of_reading) > (120.0 - cfg.poll_secs - 5.0):
-                    log.info('Reading from %s:%d is old: %d seconds.' % (
+                    log.info('Ignoring reading from %s:%d--age: %d seconds.' % (
                         source.hostname, source.port, age_of_reading))
                     continue
                 concentrations = Concentrations(
@@ -240,15 +240,6 @@ def collect_data(hostname, port, timeout, proxy = False):
                 log.info('purpleair reading from %s not sane, %s: %s' % (hostname, reason, j))
                 return None
             time_of_reading = datetime_from_reading(j['DateTime'])
-            # If proxy, the reading could be old.
-            if proxy:
-                #Check that it's not older than 2 min.
-                age_of_reading = utc_now().timestamp() - time_of_reading.timestamp()
-                if abs(age_of_reading) > 120:
-                    # Nothing current, will have to read directly for PurpleAir device.
-                    log.info('Ignoring proxy reading from %s--age: %d seconds.'
-                             % (hostname, age_of_reading))
-                    j = None
     except Exception as e:
         log.info('collect_data: Attempt to fetch from: %s failed: %s.' % (hostname, e))
         j = None
@@ -316,8 +307,6 @@ class Purple(StdService):
             archive_delay    = to_int(config_dict['StdArchive'].get('archive_delay', 15)),
             poll_secs        = to_int(self.config_dict.get('poll_secs', 15)),
             sources          = Purple.configure_sources(self.config_dict))
-        with self.cfg.lock:
-            self.cfg.concentrations = get_concentrations(self.cfg)
 
         log.info('poll_secs: %d' % self.cfg.poll_secs)
         source_count = 0
@@ -332,6 +321,9 @@ class Purple(StdService):
             log.error('No sources configured for purple extension.  Purple extension is inoperable.')
         else:
             weewx.xtypes.xtypes.append(AQI())
+
+            with self.cfg.lock:
+                self.cfg.concentrations = get_concentrations(self.cfg)
 
             # Start a thread to query proxies and make aqi available to loopdata
             dp: DevicePoller = DevicePoller(self.cfg)
