@@ -48,7 +48,7 @@ from weewx.engine import StdService
 
 log = logging.getLogger(__name__)
 
-WEEWX_PURPLE_VERSION = "3.7"
+WEEWX_PURPLE_VERSION = "3.8"
 
 if sys.version_info[0] < 3 or (sys.version_info[0] == 3 and sys.version_info[1] < 7):
     raise weewx.UnsupportedFeature(
@@ -171,7 +171,13 @@ def exhibits_twenty_fold_delta(val_1: float, val_2: float) -> bool:
     # If either value is zero, skip this check.
     if val_1 == 0.0 or val_2 == 0.0:
         return False
-    return (val_1 * 20.0) < val_2 or (val_2 * 20.0) < val_1
+    twenty_fold_diff = (val_1 * 20.0) < val_2 or (val_2 * 20.0) < val_1
+    if twenty_fold_diff:
+        # The twenty_fold_diff could be because 1 reading is close to zero.
+        # As sush, return False if the delta between the readings is < 10.0
+        if abs(val_1 - val_2) < 10.0:
+            return False
+    return twenty_fold_diff
 
 def is_sane(j: Dict[str, Any]) -> Tuple[bool, str]:
     if 'DateTime' not in j:
