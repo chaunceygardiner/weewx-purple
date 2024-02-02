@@ -104,9 +104,9 @@ class Concentrations:
 class Configuration:
     lock            : threading.Lock
     concentrations  : Optional[Concentrations] # Controlled by lock
-    archive_delay   : int            # Immutable
-    poll_secs       : int            # Immutable
-    sources         : List[Source]   # Immutable
+    archive_delay   : int                      # Immutable
+    poll_secs       : int                      # Immutable
+    sources         : List[Source]             # Immutable
 
 def datetime_from_reading(dt_str):
     dt_str = dt_str.replace('z', 'UTC')
@@ -217,11 +217,11 @@ def is_sane(j: Dict[str, Any]) -> Tuple[bool, str]:
             return False, reason
         # Check on agreement between the sensors
         if exhibits_twenty_fold_delta(j['pm2_5_cf_1'], j['pm2_5_cf_1_b']):
-            return False, 'Sensors disagree wildly for pm2_5_cf_1'
+            return False, 'Sensors disagree wildly for pm2_5_cf_1 (%f, %f)' % (j['pm2_5_cf_1'], j['pm2_5_cf_1_b'])
         if exhibits_twenty_fold_delta(j['pm1_0_cf_1'], j['pm1_0_cf_1_b']):
-            return False, 'Sensors disagree wildly for pm1_0_cf_1'
+            return False, 'Sensors disagree wildly for pm1_0_cf_1 (%f, %f)' % (j['pm1_0_cf_1'], j['pm1_0_cf_1_b'])
         if exhibits_twenty_fold_delta(j['pm10_0_cf_1'], j['pm10_0_cf_1_b']):
-            return False, 'Sensors disagree wildly for pm10_0_cf_1'
+            return False, 'Sensors disagree wildly for pm10_0_cf_1 (%f, %f)' % (j['pm10_0_cf_1'], j['pm10_0_cf_1_b'])
 
     return True, ''
 

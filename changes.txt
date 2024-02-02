@@ -1,6 +1,18 @@
 weewx-purple change history
 ---------------------------
 
+3.8 02/01/2024
+--------------
+better logging when sensors wildly differ
+
+3.7 01/18/2024
+--------------
+Clean up code, was checking for stale readings in two places.
+
+3.6 01/10/2024
+--------------
+Include hostname in log entry when ignoring insane readings due to age or insanity.
+
 3.5 12/03/2023
 --------------
 Tweak check for old readings so readings don't age out before the next poll.
