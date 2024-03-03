@@ -1,6 +1,10 @@
 weewx-purple change history
 ---------------------------
 
+3.9 03/02/2024
+--------------
+Speed up aggregations of xtype AQI by inserting the type at the front.
+
 3.8 02/01/2024
 --------------
 better logging when sensors wildly differ

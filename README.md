@@ -7,9 +7,9 @@ A WeeWX plugin that gets its PurpleAir sensor readings either directly
 from the PurpleAir sensor or from a
 [purple-proxy](https://github.com/chaunceygardiner/weewx-purple) service.
 
-Copyright (C)2020 by John A Kline (john@johnkline.com)
+Copyright (C)2020-2024 by John A Kline (john@johnkline.com)
 
-**This plugin requires Python 3.7, WeeWX 4 and the
+**This plugin requires Python 3.7, WeeWX 4 or 5 and the
 [wview_extended](https://github.com/weewx/weewx/blob/master/bin/schemas/wview_extended.py)
 schema**
 
@@ -78,7 +78,7 @@ See `weewx-purple` and `purple-proxy` in action on the following pages:
 # Installation Instructions
 
 If you don't meet the following requirements, don't install this extension.
-  * WeeWX 4
+  * WeeWX 4 or 5
   * Using WeeWX 4's new wview_extended schema.
   * Python 3.7 or greater
 
@@ -90,7 +90,7 @@ If you don't meet the following requirements, don't install this extension.
 
    `apt install python3-requests`
 
-1. Download the lastest release, weewx-purple-3.3.zip, from the
+1. Download the lastest release, weewx-purple-3.9.zip, from the
    [GitHub Repository](https://github.com/chaunceygardiner/weewx-purple).
 
 1. Run the following command.

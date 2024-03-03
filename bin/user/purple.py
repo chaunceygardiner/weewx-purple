@@ -48,7 +48,7 @@ from weewx.engine import StdService
 
 log = logging.getLogger(__name__)
 
-WEEWX_PURPLE_VERSION = "3.8"
+WEEWX_PURPLE_VERSION = "3.9"
 
 if sys.version_info[0] < 3 or (sys.version_info[0] == 3 and sys.version_info[1] < 7):
     raise weewx.UnsupportedFeature(
@@ -326,7 +326,7 @@ class Purple(StdService):
         if source_count == 0:
             log.error('No sources configured for purple extension.  Purple extension is inoperable.')
         else:
-            weewx.xtypes.xtypes.append(AQI())
+            weewx.xtypes.xtypes.insert(0, AQI())
 
             with self.cfg.lock:
                 self.cfg.concentrations = get_concentrations(self.cfg)
