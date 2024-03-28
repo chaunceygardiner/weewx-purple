@@ -90,7 +90,7 @@ If you don't meet the following requirements, don't install this extension.
 
    `apt install python3-requests`
 
-1. Download the lastest release, weewx-purple-3.9.zip, from the
+1. Download the lastest release, weewx-purple-3.9.1.zip, from the
    [GitHub Repository](https://github.com/chaunceygardiner/weewx-purple).
 
 1. Run the following command.
