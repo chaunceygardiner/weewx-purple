@@ -48,7 +48,7 @@ from weewx.engine import StdService
 
 log = logging.getLogger(__name__)
 
-WEEWX_PURPLE_VERSION = "3.9"
+WEEWX_PURPLE_VERSION = "3.9.1"
 
 if sys.version_info[0] < 3 or (sys.version_info[0] == 3 and sys.version_info[1] < 7):
     raise weewx.UnsupportedFeature(
@@ -106,6 +106,7 @@ class Configuration:
     concentrations  : Optional[Concentrations] # Controlled by lock
     archive_delay   : int                      # Immutable
     poll_secs       : int                      # Immutable
+    fresh_secs      : int                      # Immutable
     sources         : List[Source]             # Immutable
 
 def datetime_from_reading(dt_str):
@@ -127,11 +128,11 @@ def get_concentrations(cfg: Configuration):
                 log.debug('get_concentrations: source: %s' % record)
                 reading_ts = to_int(record['dateTime'])
                 age_of_reading = time.time() - reading_ts
-                # Ignore old readings.  We can't reading of 120s or close to
+                # Ignore old readings.  We can't reading of fresh_secs or close to
                 # it because the reading will age before the next time
-                # concentrations are polled.  Reduce 120s poll_secs by
+                # concentrations are polled.  Reduce fresh_secs - poll_secs by
                 # 5s (as a buffer).
-                if abs(age_of_reading) > (120.0 - cfg.poll_secs - 5.0):
+                if abs(age_of_reading) > (cfg.fresh_secs - cfg.poll_secs - 5.0):
                     log.info('Ignoring reading from %s:%d--age: %d seconds.' % (
                         source.hostname, source.port, age_of_reading))
                     continue
@@ -307,14 +308,19 @@ class Purple(StdService):
         self.engine = engine
         self.config_dict = config_dict.get('Purple', {})
 
+        poll_secs  = to_int(self.config_dict.get('poll_secs', 15))
+        fresh_secs = max(120, 3 * poll_secs)
+
         self.cfg = Configuration(
             lock             = threading.Lock(),
             concentrations   = None,
             archive_delay    = to_int(config_dict['StdArchive'].get('archive_delay', 15)),
-            poll_secs        = to_int(self.config_dict.get('poll_secs', 15)),
+            poll_secs        = poll_secs,
+            fresh_secs       = fresh_secs,
             sources          = Purple.configure_sources(self.config_dict))
 
-        log.info('poll_secs: %d' % self.cfg.poll_secs)
+        log.info('poll_secs : %d' % self.cfg.poll_secs)
+        log.info('fresh_secs: %d' % self.cfg.fresh_secs)
         source_count = 0
         for source in self.cfg.sources:
             if source.enable:
@@ -346,7 +352,7 @@ class Purple(StdService):
             log.debug('new_loop_packet: self.cfg.concentrations: %s' % self.cfg.concentrations)
             if self.cfg.concentrations is not None and \
                     self.cfg.concentrations.timestamp is not None and \
-                    self.cfg.concentrations.timestamp + 120 >= time.time():
+                    self.cfg.concentrations.timestamp + self.cfg.fresh_secs >= time.time():
                 log.debug('Time of reading being inserted: %s' % timestamp_to_string(self.cfg.concentrations.timestamp))
                 # Insert pm1_0, pm2_5, pm10_0, aqi and aqic into loop packet.
                 if self.cfg.concentrations.pm1_0 is not None:

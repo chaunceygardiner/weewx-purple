@@ -1,6 +1,10 @@
 weewx-purple change history
 ---------------------------
 
+3.9.1 03/27/2024
+----------------
+When checking for freshness, consider a reading old if its age is > MAx(120s, 3*poll_secs).
+
 3.9 03/02/2024
 --------------
 Speed up aggregations of xtype AQI by inserting the type at the front.
