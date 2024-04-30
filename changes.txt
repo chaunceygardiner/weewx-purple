@@ -1,6 +1,11 @@
 weewx-purple change history
 ---------------------------
 
+3.9.2 04/30/2024
+----------------
+Added WeeWX 5 install instructions. (Issue #6)
+Fix for mysql complaining about select statement. (Issue #7)
+
 3.9.1 03/27/2024
 ----------------
 When checking for freshness, consider a reading old if its age is > MAx(120s, 3*poll_secs).

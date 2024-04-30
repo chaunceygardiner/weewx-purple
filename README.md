@@ -82,6 +82,88 @@ If you don't meet the following requirements, don't install this extension.
   * Using WeeWX 4's new wview_extended schema.
   * Python 3.7 or greater
 
+## WeeWX 5 Installation Instructions
+
+1. Activate the virtual environment (actual syntax varies by type of WeeWX install):
+   `/home/weewx/weewx-venv/bin/activate`
+
+1. Install the dateutil package.
+
+   `pip install dateutil`
+
+1. Install the requests package.
+
+   `apt install requests`
+
+
+1. Download the lastest release, weewx-purple-3.9.2.zip, from the
+   [GitHub Repository](https://github.com/chaunceygardiner/weewx-purple).
+
+1. Install the purple extension.
+
+   `weectl extension install weewx-purple-3.9.2.zip`
+
+1. Edit the `Purple` section of weewx.conf (which was created by the install
+   above).  PurpleAir sensors are specified with section names of `Sensor1`,
+   `Sensor2`, `Sensor3`, etc.  Proxies are specified as `Proxy1`, `Proxy2`,
+   `Proxy3`, etc.  There is no limit on how many sensors and proxies can
+   be configured; but the numbering must be sonsecutive.  The order in which
+   sensors/proxies are interrogated is first the proxies, low numbers to high;
+   then the sensors, low numbers to high.  Once a proxy or sensor replies,
+   no further proxies/sensors are interrogated for the current polling round.
+
+   ```
+   [Purple]
+       poll_secs = 15
+       [[Sensor]]
+           enable = true
+           hostname = purple-air
+           port = 80
+           timeout = 10
+       [[Sensor2]]
+           enable = false
+           hostname = purple-air2
+           port = 80
+           timeout = 10
+       [[Proxy1]]
+           enable = false
+           hostname = proxy
+           port = 8000
+           timeout = 10
+           starup_timeout = 60
+       [[Proxy2]]
+           enable = false
+           hostname = proxy2
+           port = 8000
+           timeout = 10
+           starup_timeout = 60
+       [[Proxy3]]
+           enable = false
+           hostname = proxy3
+           port = 8000
+           timeout = 10
+           starup_timeout = 60
+       [[Proxy4]]
+           enable = false
+           hostname = proxy4
+           port = 8000
+           timeout = 10
+           starup_timeout = 60
+   ```
+
+1. If you are Unix/Linux savy, and are willing to work with a crude
+   installation procedure, install
+   [purple-proxy](https://github.com/chaunceygardiner/purple-proxy).
+
+1. Restart WeeWX
+
+1. To check for a successful install, wait for a reporting cycle, then
+   navigate in a browser to the WeeWX site and add /purple to the end
+   of the URL (e.g., http://weewx-machine/weewx/purple).
+   The PM2.5 and AQI graphs will fill in over time.
+
+## WeeWX 4 Installation Instructions
+
 1. Install python3's dateutil package.  On debian, that can be accomplished with:
 
    `apt install python3-dateutil`
@@ -90,7 +172,7 @@ If you don't meet the following requirements, don't install this extension.
 
    `apt install python3-requests`
 
-1. Download the lastest release, weewx-purple-3.9.1.zip, from the
+1. Download the lastest release, weewx-purple-3.9.2.zip, from the
    [GitHub Repository](https://github.com/chaunceygardiner/weewx-purple).
 
 1. Run the following command.

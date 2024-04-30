@@ -1,4 +1,4 @@
-# Copyright 2020 by John A Kline <john@johnkline.com>
+# Copyright 2020-2024 by John A Kline <john@johnkline.com>
 #
 # This program is free software; you can redistribute it and/or
 # modify it under the terms of the GNU General Public License
@@ -48,7 +48,7 @@ from weewx.engine import StdService
 
 log = logging.getLogger(__name__)
 
-WEEWX_PURPLE_VERSION = "3.9.1"
+WEEWX_PURPLE_VERSION = "3.9.2"
 
 if sys.version_info[0] < 3 or (sys.version_info[0] == 3 and sys.version_info[1] < 7):
     raise weewx.UnsupportedFeature(
@@ -478,23 +478,23 @@ class AQI(weewx.xtypes.XType):
         pass
 
     agg_sql_dict = {
-        'avg': "SELECT AVG(pm2_5), usUnits FROM %(table_name)s "
+        'avg': "SELECT AVG(pm2_5), MIN(usUnits) FROM %(table_name)s "
                "WHERE dateTime > %(start)s AND dateTime <= %(stop)s AND pm2_5 IS NOT NULL",
-        'count': "SELECT COUNT(dateTime), usUnits FROM %(table_name)s "
+        'count': "SELECT COUNT(dateTime), MIN(usUnits) FROM %(table_name)s "
                  "WHERE dateTime > %(start)s AND dateTime <= %(stop)s AND pm2_5 IS NOT NULL",
-        'first': "SELECT pm2_5, usUnits FROM %(table_name)s "
+        'first': "SELECT pm2_5, MIN(usUnits) FROM %(table_name)s "
                  "WHERE dateTime = (SELECT MIN(dateTime) FROM %(table_name)s "
                  "WHERE dateTime > %(start)s AND dateTime <= %(stop)s AND pm2_5 IS NOT NULL",
-        'last': "SELECT pm2_5, usUnits FROM %(table_name)s "
+        'last': "SELECT pm2_5, MIN(usUnits) FROM %(table_name)s "
                 "WHERE dateTime = (SELECT MAX(dateTime) FROM %(table_name)s "
                 "WHERE dateTime > %(start)s AND dateTime <= %(stop)s AND pm2_5 IS NOT NULL",
-        'min': "SELECT pm2_5, usUnits FROM %(table_name)s "
+        'min': "SELECT pm2_5, MIN(usUnits) FROM %(table_name)s "
                "WHERE dateTime > %(start)s AND dateTime <= %(stop)s AND pm2_5 IS NOT NULL "
                "ORDER BY pm2_5 ASC LIMIT 1;",
-        'max': "SELECT pm2_5, usUnits FROM %(table_name)s "
+        'max': "SELECT pm2_5, MIN(usUnits) FROM %(table_name)s "
                "WHERE dateTime > %(start)s AND dateTime <= %(stop)s AND pm2_5 IS NOT NULL "
                "ORDER BY pm2_5 DESC LIMIT 1;",
-        'sum': "SELECT SUM(pm2_5), usUnits FROM %(table_name)s "
+        'sum': "SELECT SUM(pm2_5), MIN(usUnits) FROM %(table_name)s "
                "WHERE dateTime > %(start)s AND dateTime <= %(stop)s AND pm2_5 IS NOT NULL)",
     }
 
