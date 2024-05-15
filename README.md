@@ -10,12 +10,12 @@ from the PurpleAir sensor or from a
 Copyright (C)2020-2024 by John A Kline (john@johnkline.com)
 
 **This plugin requires Python 3.7, WeeWX 4 or 5 and the
-[wview_extended](https://github.com/weewx/weewx/blob/master/bin/schemas/wview_extended.py)
+[wview_extended](https://github.com/weewx/weewx/blob/master/src/schemas/wview_extended.py)
 schema**
 
 weewx-purple requires the
-[wview_extended](https://github.com/weewx/weewx/blob/master/bin/schemas/wview_extended.py)
-in WeeWX 4 that contains pm1_0, pm2_5 and pm10_0 columns.  With the weewx-purple
+[wview_extended](https://github.com/weewx/weewx/blob/master/src/schemas/wview_extended.py)
+in WeeWX 4 or 5 that contains pm1_0, pm2_5 and pm10_0 columns.  With the weewx-purple
 extension, Loop records will be populated with pm1_0, pm2_5 and pm10_0 fields that
 correspond to PurpleAir's pm1_0_cf_1, pm2_5_cf_1 and pm10_cf_1 fields.
 
@@ -46,7 +46,7 @@ true for all regions in the study (throughout the USA) and for
 all conditions (including wildfire smoke).
 
 In addition to pm1_0, pm2_5 and pm10_0, AQI variables are also available
-(even though they are not in the database) via WeeWX 4's
+(even though they are not in the database) via WeeWX 4's (or 5's)
 [XTypes](https://github.com/weewx/weewx/wiki/WeeWX-V4-user-defined-types).
 pm2_5_aqi is automatically computed from pm2_5 and can be used in reports
 (`$current.pm2_5_aqi`) and in graphs `[[[[pm2_5_aqi]]]`.  Also available is
