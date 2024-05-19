@@ -93,7 +93,7 @@ If you don't meet the following requirements, don't install this extension.
 
 1. Install the requests package.
 
-   `apt install requests`
+   `pip install requests`
 
 
 1. Download the lastest release, weewx-purple-3.9.2.zip, from the
