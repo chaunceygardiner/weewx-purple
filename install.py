@@ -32,7 +32,7 @@ def loader():
 class PurpleInstaller(ExtensionInstaller):
     def __init__(self):
         super(PurpleInstaller, self).__init__(
-            version="3.9.2",
+            version="3.9.3",
             name='purple',
             description='Record air quality via purple-proxy service.',
             author="John A Kline",
@@ -88,7 +88,7 @@ class PurpleInstaller(ExtensionInstaller):
             },
             files=[
                 ('bin/user', ['bin/user/purple.py']),
-                ('skins/nws', [
+                ('skins/purple', [
                     'skins/purple/index.html.tmpl',
                     'skins/purple/skin.conf',
                 ]),
