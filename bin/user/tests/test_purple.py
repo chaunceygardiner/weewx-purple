@@ -235,10 +235,17 @@ class PurpleTests(unittest.TestCase):
 
         # Disagreeing Sensors
         bad_pkt = VALID_PKT.copy()
-        bad_pkt['pm2_5_cf_1'] = 0.000001
+        bad_pkt['pm2_5_cf_1_b'] = 25.0
+        bad_pkt['pm2_5_cf_1'] = 1.0
         ok, reason = user.purple.is_sane(bad_pkt)
         self.assertFalse(ok, reason)
-        self.assertEqual(reason, 'Sensors disagree wildly for pm2_5_cf_1')
+        self.assertEqual(reason, 'Sensors disagree wildly for pm2_5_cf_1 (1.000000, 25.000000)')
+
+        # Disagreeing Sensors, but pm2_5 too low to trigger disagreement
+        bad_pkt = VALID_PKT.copy()
+        bad_pkt['pm2_5_cf_1'] = 0.000001
+        ok, _ = user.purple.is_sane(bad_pkt)
+        self.assertTrue(ok)
 
 if __name__ == '__main__':
     unittest.main()
