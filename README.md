@@ -84,17 +84,19 @@ If you don't meet the following requirements, don't install this extension.
 
 ## WeeWX 5 Installation Instructions
 
-1. Activate the virtual environment (actual syntax varies by type of WeeWX install):
+1. If pip install,
+   Activate the virtual environment (actual syntax varies by type of WeeWX install):
    `/home/weewx/weewx-venv/bin/activate`
-
-1. Install the dateutil package.
-
+   Install the dateutil package.
    `pip install python-dateutil`
-
-1. Install the requests package.
-
+   Install the requests package.
    `pip install requests`
 
+1. If package install:
+   Install python3's dateutil package.  On debian, that can be accomplished with:
+   `apt install python3-dateutil`
+   Install python3's requests package.  On debian, that can be accomplished with:
+   `apt install python3-requests`
 
 1. Download the lastest release, weewx-purple-3.9.3.zip, from the
    [GitHub Repository](https://github.com/chaunceygardiner/weewx-purple).
