@@ -99,12 +99,12 @@ If you don't meet the following requirements, don't install this extension.
    Install python3's requests package.  On debian, that can be accomplished with:
    `apt install python3-requests`
 
-1. Download the lastest release, weewx-purple-3.9.3.zip, from the
+1. Download the lastest release, weewx-purple.zip, from the
    [GitHub Repository](https://github.com/chaunceygardiner/weewx-purple).
 
 1. Install the purple extension.
 
-   `weectl extension install weewx-purple-3.9.3.zip`
+   `weectl extension install weewx-purple.zip`
 
 1. Edit the `Purple` section of weewx.conf (which was created by the install
    above).  PurpleAir sensors are specified with section names of `Sensor1`,
@@ -175,7 +175,7 @@ If you don't meet the following requirements, don't install this extension.
 
    `apt install python3-requests`
 
-1. Download the lastest release, weewx-purple-3.9.3.zip, from the
+1. Download the lastest release, weewx-purple.zip, from the
    [GitHub Repository](https://github.com/chaunceygardiner/weewx-purple).
 
 1. Run the following command.
