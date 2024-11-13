@@ -1,6 +1,11 @@
 weewx-purple change history
 ---------------------------
 
+4.0 11/12/2024
+--------------
+Update to EPA 2024 AQI Calculation.
+See: https://www.epa.gov/system/files/documents/2024-02/pm-naaqs-air-quality-index-fact-sheet.pdf
+
 3.9.2 04/30/2024
 ----------------
 Added WeeWX 5 install instructions. (Issue #6)

@@ -48,7 +48,7 @@ from weewx.engine import StdService
 
 log = logging.getLogger(__name__)
 
-WEEWX_PURPLE_VERSION = "3.9.3"
+WEEWX_PURPLE_VERSION = "4.0"
 
 if sys.version_info[0] < 3 or (sys.version_info[0] == 3 and sys.version_info[1] < 7):
     raise weewx.UnsupportedFeature(
@@ -515,32 +515,29 @@ class AQI(weewx.xtypes.XType):
         #             U.S. EPA PM2.5 AQI
         #
         #  AQI Category  AQI Value  24-hr PM2.5
-        # Good             0 -  50    0.0 -  12.0
-        # Moderate        51 - 100   12.1 -  35.4
+        # Good             0 -  50    0.0 -   9.0
+        # Moderate        51 - 100    9.1 -  35.4
         # USG            101 - 150   35.5 -  55.4
-        # Unhealthy      151 - 200   55.5 - 150.4
-        # Very Unhealthy 201 - 300  150.5 - 250.4
-        # Hazardous      301 - 400  250.5 - 350.4
-        # Hazardous      401 - 500  350.5 - 500.4
+        # Unhealthy      151 - 200   55.5 - 125.4
+        # Very Unhealthy 201 - 300  125.5 - 225.4
+        # Hazardous      301 - 500  225.5 and above
 
         # The EPA standard for AQI says to truncate PM2.5 to one decimal place.
         # See https://www3.epa.gov/airnow/aqi-technical-assistance-document-sept2018.pdf
         x = math.trunc(pm2_5 * 10) / 10
 
-        if x <= 12.0: # Good
-            return round(x / 12.0 * 50)
+        if x <= 9.0: # Good
+            return round(x / 9.0 * 50)
         elif x <= 35.4: # Moderate
-            return round((x - 12.1) / 23.3 * 49.0 + 51.0)
+            return round((x - 9.1) / 26.3 * 49.0 + 51.0)
         elif x <= 55.4: # Unhealthy for senstive
             return round((x - 35.5) / 19.9 * 49.0 + 101.0)
-        elif x <= 150.4: # Unhealthy
-            return round((x - 55.5) / 94.9 * 49.0 + 151.0)
-        elif x <= 250.4: # Very Unhealthy
-            return round((x - 150.5) / 99.9 * 99.0 + 201.0)
-        elif x <= 350.4: # Hazardous
-            return round((x - 250.5) / 99.9 * 99.0 + 301.0)
+        elif x <= 125.4: # Unhealthy
+            return round((x - 55.5) / 69.9 * 49.0 + 151.0)
+        elif x <= 225.4: # Very Unhealthy
+            return round((x - 125.5) / 99.9 * 99.0 + 201.0)
         else: # Hazardous
-            return round((x - 350.5) / 149.9 * 99.0 + 401.0)
+            return round((x - 225.5) / 199.9 * 199.0 + 301.0)
 
     @staticmethod
     def compute_pm2_5_aqi_color(pm2_5_aqi):

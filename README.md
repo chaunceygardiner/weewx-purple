@@ -20,13 +20,14 @@ extension, Loop records will be populated with pm1_0, pm2_5 and pm10_0 fields th
 correspond to PurpleAir's pm1_0_cf_1, pm2_5_cf_1 and pm10_cf_1 fields.
 
 Note: As of v3.0, this extension always applies the US EPA correction for PM2.5.  As of v3.1, the
-   correction has been updated to the 2021 version of that correction.  See:
-   (https://www.epa.gov/sites/default/files/2021-05/documents/toolsresourceswebinar_purpleairsmoke_210519b.pdf)
+   correction has been updated to the [2021 version of that correction](https://www.epa.gov/sites/default/files/2021-05/documents/toolsresourceswebinar_purpleairsmoke_210519b.pdf)
    The LRAPA and UNBC corrections have been removed (as well as the uncorrected
    PM2.5 value).
 
 As of v3.0, the uncorrected PM2.5 concentration is no longer available.
 The LRAPA and UNBC corrections have also been removed.
+
+Note: As of v4.0, the computed AQI values conform to the [2024 EPA definition](https://www.epa.gov/system/files/documents/2024-02/pm-naaqs-air-quality-index-fact-sheet.pdf)
 
 The reason for this change is that the EPA correction needs the
 temperature and humidity as reported by the sensor.  These values

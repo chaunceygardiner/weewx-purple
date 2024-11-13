@@ -105,14 +105,14 @@ class PurpleTests(unittest.TestCase):
 
         # Good
         self.assertEqual(user.purple.AQI.compute_pm2_5_aqi( 0.0), 0)
-        self.assertEqual(user.purple.AQI.compute_pm2_5_aqi( 6.0), 25)
-        self.assertEqual(user.purple.AQI.compute_pm2_5_aqi(12.0), 50)
-        # 12.099 is truncated to 12
-        self.assertEqual(user.purple.AQI.compute_pm2_5_aqi(12.099), 50)
+        self.assertEqual(user.purple.AQI.compute_pm2_5_aqi( 6.0), 33)
+        self.assertEqual(user.purple.AQI.compute_pm2_5_aqi( 9.0), 50)
+        # 9.099 is truncated to 9
+        self.assertEqual(user.purple.AQI.compute_pm2_5_aqi(9.099), 50)
 
         # Moderate
-        self.assertEqual(user.purple.AQI.compute_pm2_5_aqi(12.1),  51)
-        aqi = user.purple.AQI.compute_pm2_5_aqi(23.7)
+        self.assertEqual(user.purple.AQI.compute_pm2_5_aqi(9.1),  51)
+        aqi = user.purple.AQI.compute_pm2_5_aqi(21.8)
         self.assertEqual(aqi, 75)
         self.assertEqual(user.purple.AQI.compute_pm2_5_aqi(35.499), 100)
 
@@ -124,27 +124,22 @@ class PurpleTests(unittest.TestCase):
 
         # Unhealthy
         self.assertEqual(user.purple.AQI.compute_pm2_5_aqi( 55.5), 151)
-        aqi = user.purple.AQI.compute_pm2_5_aqi(102.9)
+        aqi = user.purple.AQI.compute_pm2_5_aqi(90.5)
         self.assertTrue(aqi, 175.4)
-        self.assertEqual(user.purple.AQI.compute_pm2_5_aqi(150.4), 200)
+        self.assertEqual(user.purple.AQI.compute_pm2_5_aqi(125.4), 200)
 
         # Very Unhealthy
-        self.assertEqual(user.purple.AQI.compute_pm2_5_aqi(150.5), 201)
-        aqi = user.purple.AQI.compute_pm2_5_aqi(200.4)
+        self.assertEqual(user.purple.AQI.compute_pm2_5_aqi(125.5), 201)
+        aqi = user.purple.AQI.compute_pm2_5_aqi(175.4)
         self.assertEqual(aqi, 250)
-        self.assertEqual(user.purple.AQI.compute_pm2_5_aqi(250.4), 300)
+        self.assertEqual(user.purple.AQI.compute_pm2_5_aqi(225.4), 300)
 
         # Harzadous
-        self.assertEqual(user.purple.AQI.compute_pm2_5_aqi(250.5), 301)
-        aqi = user.purple.AQI.compute_pm2_5_aqi(300.4)
-        self.assertEqual(aqi, 350)
-        self.assertEqual(user.purple.AQI.compute_pm2_5_aqi(350.4), 400)
-
-        # Harzadous
-        self.assertEqual(user.purple.AQI.compute_pm2_5_aqi(350.5), 401)
-        aqi = user.purple.AQI.compute_pm2_5_aqi(425.45)
+        self.assertEqual(user.purple.AQI.compute_pm2_5_aqi(225.5), 301)
+        self.assertEqual(user.purple.AQI.compute_pm2_5_aqi(325.0), 400)
+        aqi = user.purple.AQI.compute_pm2_5_aqi(375.0)
         self.assertEqual(aqi, 450)
-        self.assertEqual(user.purple.AQI.compute_pm2_5_aqi(500.4), 500)
+        self.assertEqual(user.purple.AQI.compute_pm2_5_aqi(425.0), 500)
 
     #             U.S. EPA PM2.5 AQI
     #
