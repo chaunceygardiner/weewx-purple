@@ -93,13 +93,12 @@ class PurpleTests(unittest.TestCase):
     #             U.S. EPA PM2.5 AQI
     #
     #  AQI Category  AQI Value  24-hr PM2.5
-    # Good             0 -  50    0.0 -  12.0
-    # Moderate        51 - 100   12.1 -  35.4
+    # Good             0 -  50    0.0 -   9.0
+    # Moderate        51 - 100    9.1 -  35.4
     # USG            101 - 150   35.5 -  55.4
-    # Unhealthy      151 - 200   55.5 - 150.4
-    # Very Unhealthy 201 - 300  150.5 - 250.4
-    # Hazardous      301 - 400  250.5 - 350.4
-    # Hazardous      401 - 500  350.5 - 500.4
+    # Unhealthy      151 - 200   55.5 - 125.4
+    # Very Unhealthy 201 - 300  125.5 - 225.4
+    # Hazardous      301 - 500  225.5 and above
 
     def test_compute_pm2_5_aqi(self):
 
@@ -144,13 +143,12 @@ class PurpleTests(unittest.TestCase):
     #             U.S. EPA PM2.5 AQI
     #
     #  AQI Category  AQI Value  24-hr PM2.5
-    # Good             0 -  50    0.0 -  12.0
-    # Moderate        51 - 100   12.1 -  35.4
+    # Good             0 -  50    0.0 -   9.0
+    # Moderate        51 - 100    9.1 -  35.4
     # USG            101 - 150   35.5 -  55.4
-    # Unhealthy      151 - 200   55.5 - 150.4
-    # Very Unhealthy 201 - 300  150.5 - 250.4
-    # Hazardous      301 - 400  250.5 - 350.4
-    # Hazardous      401 - 500  350.5 - 500.4
+    # Unhealthy      151 - 200   55.5 - 125.4
+    # Very Unhealthy 201 - 300  125.5 - 225.4
+    # Hazardous      301 - 500  225.5 and above
 
     def test_compute_pm2_5_aqi_color(self):
 
