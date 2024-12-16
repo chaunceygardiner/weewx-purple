@@ -48,7 +48,7 @@ from weewx.engine import StdService
 
 log = logging.getLogger(__name__)
 
-WEEWX_PURPLE_VERSION = "4.0"
+WEEWX_PURPLE_VERSION = "4.0.1"
 
 if sys.version_info[0] < 3 or (sys.version_info[0] == 3 and sys.version_info[1] < 7):
     raise weewx.UnsupportedFeature(
@@ -542,17 +542,17 @@ class AQI(weewx.xtypes.XType):
     @staticmethod
     def compute_pm2_5_aqi_color(pm2_5_aqi):
         if pm2_5_aqi <= 50:
-            return 128 << 8                 # Green
+            return 228 << 8                      # Green
         elif pm2_5_aqi <= 100:
-            return (255 << 16) + (255 << 8) # Yellow
+            return (255 << 16) + (255 << 8)      # Yellow
         elif pm2_5_aqi <=  150:
-            return (255 << 16) + (140 << 8) # Orange
+            return (255 << 16) + (126 << 8)      # Orange
         elif pm2_5_aqi <= 200:
-            return 255 << 16                # Red
+            return 255 << 16                     # Red
         elif pm2_5_aqi <= 300:
-            return (128 << 16) + 128        # Purple
+            return (143 << 16) + (63 << 8) + 151 # Purple
         else:
-            return 128 << 16                # Maroon
+            return 126 << 16  + 35               # Maroon
 
     @staticmethod
     def compute_pm2_5_us_epa_correction(pm2_5_cf_1: float, pm2_5_cf_1_b: float, current_humidity: int, current_temp_f: int) -> float:

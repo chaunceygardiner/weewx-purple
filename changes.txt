@@ -1,6 +1,12 @@
 weewx-purple change history
 ---------------------------
 
+4.0.1 12/15/2024
+----------------
+Update index colors to use EPA color forumulas
+(See table 2 (pg. 4 at  https://document.airnow.gov/technical-assistance-document-for-the-reporting-of-daily-air-quailty.pdf )
+
+
 4.0 11/12/2024
 --------------
 Update to EPA 2024 AQI Calculation.
