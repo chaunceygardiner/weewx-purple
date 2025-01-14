@@ -153,9 +153,9 @@ class PurpleTests(unittest.TestCase):
     def test_compute_pm2_5_aqi_color(self):
 
         # Good
-        self.assertEqual(user.purple.AQI.compute_pm2_5_aqi_color( 0), 128 << 8)
-        self.assertEqual(user.purple.AQI.compute_pm2_5_aqi_color(25), 128 << 8)
-        self.assertEqual(user.purple.AQI.compute_pm2_5_aqi_color(50), 128 << 8)
+        self.assertEqual(user.purple.AQI.compute_pm2_5_aqi_color( 0), 228 << 8)
+        self.assertEqual(user.purple.AQI.compute_pm2_5_aqi_color(25), 228 << 8)
+        self.assertEqual(user.purple.AQI.compute_pm2_5_aqi_color(50), 228 << 8)
 
         # Moderate
         self.assertEqual(user.purple.AQI.compute_pm2_5_aqi_color( 51), (255 << 16) + (255 << 8))
@@ -163,9 +163,9 @@ class PurpleTests(unittest.TestCase):
         self.assertEqual(user.purple.AQI.compute_pm2_5_aqi_color(100), (255 << 16) + (255 << 8))
 
         # USG
-        self.assertEqual(user.purple.AQI.compute_pm2_5_aqi_color(101), (255 << 16) + (140 << 8))
-        self.assertEqual(user.purple.AQI.compute_pm2_5_aqi_color(125), (255 << 16) + (140 << 8))
-        self.assertEqual(user.purple.AQI.compute_pm2_5_aqi_color(150), (255 << 16) + (140 << 8))
+        self.assertEqual(user.purple.AQI.compute_pm2_5_aqi_color(101), (255 << 16) + (126 << 8))
+        self.assertEqual(user.purple.AQI.compute_pm2_5_aqi_color(125), (255 << 16) + (126 << 8))
+        self.assertEqual(user.purple.AQI.compute_pm2_5_aqi_color(150), (255 << 16) + (126 << 8))
 
         # Unhealthy
         self.assertEqual(user.purple.AQI.compute_pm2_5_aqi_color(151), (255 << 16))
@@ -173,19 +173,17 @@ class PurpleTests(unittest.TestCase):
         self.assertEqual(user.purple.AQI.compute_pm2_5_aqi_color(200), (255 << 16))
 
         # Very Unhealthy
-        self.assertEqual(user.purple.AQI.compute_pm2_5_aqi_color(201), (128 << 16) + 128)
-        self.assertEqual(user.purple.AQI.compute_pm2_5_aqi_color(250), (128 << 16) + 128)
-        self.assertEqual(user.purple.AQI.compute_pm2_5_aqi_color(300), (128 << 16) + 128)
+        self.assertEqual(user.purple.AQI.compute_pm2_5_aqi_color(201), (143 << 16) + (63 << 8) + 151)
+        self.assertEqual(user.purple.AQI.compute_pm2_5_aqi_color(250), (143 << 16) + (63 << 8) + 151)
+        self.assertEqual(user.purple.AQI.compute_pm2_5_aqi_color(300), (143 << 16) + (63 << 8) + 151)
 
         # Harzadous
-        self.assertEqual(user.purple.AQI.compute_pm2_5_aqi_color(301), 128 << 16)
-        self.assertEqual(user.purple.AQI.compute_pm2_5_aqi_color(350), 128 << 16)
-        self.assertEqual(user.purple.AQI.compute_pm2_5_aqi_color(400), 128 << 16)
-
-        # Harzadous
-        self.assertEqual(user.purple.AQI.compute_pm2_5_aqi_color(401), 128 << 16)
-        self.assertEqual(user.purple.AQI.compute_pm2_5_aqi_color(450), 128 << 16)
-        self.assertEqual(user.purple.AQI.compute_pm2_5_aqi_color(500), 128 << 16)
+        self.assertEqual(user.purple.AQI.compute_pm2_5_aqi_color(301), (126 << 16) + 35)
+        self.assertEqual(user.purple.AQI.compute_pm2_5_aqi_color(350), (126 << 16) + 35)
+        self.assertEqual(user.purple.AQI.compute_pm2_5_aqi_color(400), (126 << 16) + 35)
+        self.assertEqual(user.purple.AQI.compute_pm2_5_aqi_color(401), (126 << 16) + 35)
+        self.assertEqual(user.purple.AQI.compute_pm2_5_aqi_color(450), (126 << 16) + 35)
+        self.assertEqual(user.purple.AQI.compute_pm2_5_aqi_color(500), (126 << 16) + 35)
 
     def test_compute_pm2_5_us_epa_correction(self):
         # 2021 EPA Correction

@@ -1,6 +1,10 @@
 weewx-purple change history
 ---------------------------
 
+4.0.2 01/14/2025
+----------------
+Fix color for hazardous.  Fix tests.
+
 4.0.1 12/15/2024
 ----------------
 Update index colors to use EPA color forumulas
