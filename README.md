@@ -69,7 +69,7 @@ A skin is provided to show a sample report:
 purple-proxy is optional when using weewx-purple.  purple-proxy
 returns an average over the archive period when queried.  Use of purple-proxy
 is not recommended (and strongly discouraged for all but the most Unix/Linux
-savy.  The install is rather crude and has only been tested on Debian.
+savvy.  The install is rather crude and has only been tested on Debian.
 If in doubt, skip purple-proxy and query the PurpleAir devices directly.
 
 See `weewx-purple` and `purple-proxy` in action on the following pages:
