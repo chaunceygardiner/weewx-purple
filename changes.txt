@@ -1,6 +1,10 @@
 weewx-purple change history
 ---------------------------
 
+4.0.3 01/14/2025
+----------------
+Fix SQL for MySQL.
+
 4.0.2 01/14/2025
 ----------------
 Fix color for hazardous.  Fix tests.
