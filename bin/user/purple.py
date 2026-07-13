@@ -48,7 +48,7 @@ from weewx.engine import StdService
 
 log = logging.getLogger(__name__)
 
-WEEWX_PURPLE_VERSION = "4.0.3"
+WEEWX_PURPLE_VERSION = "4.1"
 
 if sys.version_info[0] < 3 or (sys.version_info[0] == 3 and sys.version_info[1] < 7):
     raise weewx.UnsupportedFeature(
@@ -117,6 +117,16 @@ def datetime_from_reading(dt_str):
 def utc_now():
     return datetime.datetime.now(tz=tz.gettz("UTC"))
 
+def reraise_if_terminate(e: BaseException) -> None:
+    """weewxd stops by raising Terminate from its SIGTERM signal handler --
+    inside whatever the main thread is executing at that instant.  Every
+    broad exception handler on a main-thread path must call this first and
+    hand the exception back, or weewx cannot shut down.  weewxd runs as
+    __main__, so its Terminate class cannot be imported here and is
+    recognized by name."""
+    if type(e).__name__ == 'Terminate':
+        raise e
+
 def get_concentrations(cfg: Configuration):
     for source in cfg.sources:
         if source.enable:
@@ -166,6 +176,7 @@ def check_type(j: Dict[str, Any], t, names: List[str]) -> Tuple[bool, str]:
     except KeyError as e:
         return False, 'check_type: could not find key: %s' % e
     except Exception as e:
+        reraise_if_terminate(e)
         return False, 'check_type: exception: %s' % e
 
 def exhibits_twenty_fold_delta(val_1: float, val_2: float) -> bool:
@@ -248,6 +259,7 @@ def collect_data(hostname, port, timeout, proxy = False):
                 return None
             time_of_reading = datetime_from_reading(j['DateTime'])
     except Exception as e:
+        reraise_if_terminate(e)
         log.info('collect_data: Attempt to fetch from: %s failed: %s.' % (hostname, e))
         j = None
 

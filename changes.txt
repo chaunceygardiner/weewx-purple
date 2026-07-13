@@ -1,6 +1,13 @@
 weewx-purple change history
 ---------------------------
 
+4.1 07/12/2026
+--------------
+- weewx could fail to shut down if SIGTERM arrived while Purple was
+  fetching the first sensor reading at startup: the fetch's broad
+  exception handlers swallowed weewxd's Terminate.  Shutdown is now
+  passed through.
+
 4.0.3 01/14/2025
 ----------------
 Fix SQL for MySQL.
