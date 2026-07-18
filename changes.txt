@@ -1,6 +1,55 @@
 weewx-purple change history
 ---------------------------
 
+5.0 07/18/2026
+--------------
+Action required: none for typical installs.  If a report used
+$span.pm2_5_aqi.sum, remove it (see below).
+
+- The 'first' and 'last' aggregates of pm2_5_aqi/pm2_5_aqi_color produced
+  invalid SQL and always failed.  Fixed.
+- The 'count' aggregate of pm2_5_aqi returned the AQI *of the record count*
+  rather than the count.  It now returns the count.
+- The 'sum' aggregate of pm2_5_aqi is no longer accepted: the AQI of summed
+  concentrations is not a meaningful quantity.  (Its SQL was invalid anyway,
+  so it never actually worked.)
+- Aggregates over a timespan whose length is a multiple of 24 hours (e.g.,
+  a trailing 24-hour window) wrongly took the daily-summary fast path even
+  when the span did not start at local midnight, silently including data
+  from outside the span.  The fast path now requires both endpoints on
+  local midnight.
+- The Hazardous-category AQI slope was wrong: the code anchored AQI 500 at
+  425.4 ug/m^3, but the EPA definition anchors it at 325.4 (May 2024 AirNow
+  Technical Assistance Document, breakpoint-table footnote 4).  Hazardous
+  AQIs were understated by up to ~100 points: 250 ug/m^3 is AQI 350 (was
+  reported as 325); 325.4 ug/m^3 is AQI 500 (was reported as 400).
+  As in prior releases, AQI values above 500 continue on the same slope
+  (per the TAD); with the corrected anchor they begin at 325.4 ug/m^3
+  rather than 425.4.  AQI values of 300 and below (PM2.5 up to 225.4
+  ug/m^3) are computed exactly as before; readings only differ during
+  Hazardous-category air.
+  Because AQI is computed on demand from stored pm2_5, history in the
+  Hazardous range (e.g., wildfire smoke events) will re-render with the
+  corrected, higher values.
+- A sensor temperature of exactly 0 degrees F caused pm2_5 to be dropped
+  from loop packets.  Fixed.
+- The EPA correction now applies the low-concentration formula at exactly
+  343 ug/m^3, matching the EPA definition (previously high-concentration).
+- Sensor sanity checks now accept whole-number readings (JSON integers)
+  where floats are expected, reject JSON booleans where integers are
+  expected, and reject a non-string DateTime with a clear reason.
+- 'Found no fresh concentrations to insert' is now logged once per outage
+  instead of on every loop packet; recovery is logged.
+- Removed dead code: the unused purple-proxy helpers get_proxy_version and
+  get_earliest_timestamp, and the unused utc_now.
+- Tests moved to tests/ at the top level and expanded from 4 to 97 (96%
+  coverage; uncovered: only the poller loop and import-time version
+  guards); all aggregation SQL now executes against a real database in
+  the tests.
+- README rewritten.  Fixed a broken config example ([[Sensor]] instead of
+  [[Sensor1]]) that made a copy-pasted config silently inoperable, and
+  removed the bogus starup_timeout option (never read by the code).
+
 4.1 07/12/2026
 --------------
 - weewx could fail to shut down if SIGTERM arrived while Purple was

@@ -1,268 +1,237 @@
 # weewx-purple
-*Open source plugin for WeeWX software.
 
-## Description
+A WeeWX extension that reads a [PurpleAir](https://www2.purpleair.com/) air
+quality sensor on the local network (or a
+[purple-proxy](https://github.com/chaunceygardiner/purple-proxy) service) and
+inserts particulate concentrations into every WeeWX loop packet.
 
-A WeeWX plugin that gets its PurpleAir sensor readings either directly
-from the PurpleAir sensor or from a
-[purple-proxy](https://github.com/chaunceygardiner/weewx-purple) service.
+Copyright (C) 2020-2026 by John A Kline (john@johnkline.com)
 
-Copyright (C)2020-2024 by John A Kline (john@johnkline.com)
+**Requires:**
+* WeeWX 4 or 5
+* Python 3.7 or greater
+* The [wview_extended](https://github.com/weewx/weewx/blob/master/src/schemas/wview_extended.py)
+  schema (it contains the `pm1_0`, `pm2_5` and `pm10_0` columns)
+* The `python-dateutil` and `requests` Python packages
+* A PurpleAir sensor reachable on your local network
 
-**This plugin requires Python 3.7, WeeWX 4 or 5 and the
-[wview_extended](https://github.com/weewx/weewx/blob/master/src/schemas/wview_extended.py)
-schema**
+Not sure about the schema?  wview_extended is the default for new WeeWX 4
+and 5 installs; only databases created under WeeWX 3 and carried forward
+still use the old schema.  To check, look for `pm2_5` in your archive
+table, e.g.:
 
-weewx-purple requires the
-[wview_extended](https://github.com/weewx/weewx/blob/master/src/schemas/wview_extended.py)
-in WeeWX 4 or 5 that contains pm1_0, pm2_5 and pm10_0 columns.  With the weewx-purple
-extension, Loop records will be populated with pm1_0, pm2_5 and pm10_0 fields that
-correspond to PurpleAir's pm1_0_cf_1, pm2_5_cf_1 and pm10_cf_1 fields.
+```
+echo '.schema archive' | sqlite3 /var/lib/weewx/weewx.sdb | grep pm2_5
+```
 
-Note: As of v3.0, this extension always applies the US EPA correction for PM2.5.  As of v3.1, the
-   correction has been updated to the [2021 version of that correction](https://www.epa.gov/sites/default/files/2021-05/documents/toolsresourceswebinar_purpleairsmoke_210519b.pdf)
-   The LRAPA and UNBC corrections have been removed (as well as the uncorrected
-   PM2.5 value).
+## What it does
 
-As of v3.0, the uncorrected PM2.5 concentration is no longer available.
-The LRAPA and UNBC corrections have also been removed.
+Every loop packet is populated with:
 
-Note: As of v4.0, the computed AQI values conform to the [2024 EPA definition](https://www.epa.gov/system/files/documents/2024-02/pm-naaqs-air-quality-index-fact-sheet.pdf)
+| Field     | Contents                                                              |
+|-----------|-----------------------------------------------------------------------|
+| `pm1_0`   | PM1.0 concentration (µg/m³), average of the A and B channels          |
+| `pm2_5`   | PM2.5 concentration (µg/m³) with the US EPA correction applied        |
+| `pm10_0`  | PM10.0 concentration (µg/m³), average of the A and B channels         |
 
-The reason for this change is that the EPA correction needs the
-temperature and humidity as reported by the sensor.  These values
-are not saved by the extension, so it is not possible to construct
-the EPA corrected concentration later.  The extension could find an
-unused column in the schema to store the PurpleAir's temperature and
-humidity, but the author has deemed this more trouble than it is
-worth.  If the user doesn't like this change, please continue to
-use the 0.1 version of this extension.
+Two more observation types are available everywhere in reports and graphs —
+without being stored in the database — via WeeWX
+[XTypes](https://github.com/weewx/weewx/wiki/WeeWX-V4-user-defined-types):
 
-Please note that the value stored as PM2.5 (i.e., the EPA corrected
-value) is much better than the raw value, the LRAPA value and the
-UNBC value.  The EPA corrected concentration has been shown to
-result in the correct US EPA AQI category 92% of the time and only
-one off from the correct category 100% of the time.  This was
-true for all regions in the study (throughout the USA) and for
-all conditions (including wildfire smoke).
+| Field              | Contents                                                       |
+|--------------------|----------------------------------------------------------------|
+| `pm2_5_aqi`        | US EPA Air Quality Index computed from `pm2_5` (2024 definition) |
+| `pm2_5_aqi_color`  | The RGB color of the AQI category, as a single integer         |
 
-In addition to pm1_0, pm2_5 and pm10_0, AQI variables are also available
-(even though they are not in the database) via WeeWX 4's (or 5's)
-[XTypes](https://github.com/weewx/weewx/wiki/WeeWX-V4-user-defined-types).
-pm2_5_aqi is automatically computed from pm2_5 and can be used in reports
-(`$current.pm2_5_aqi`) and in graphs `[[[[pm2_5_aqi]]]`.  Also available is
-is the [RGBint](https://www.shodor.org/stella2java/rgbint.html) value
-`pm2_5_aqi_color` (useful for displaying AQI in the appropriate color
-(e.g., green for AQIs <= 50).
+On outdoor (dual-laser) sensors, readings are sanity checked: a reading is
+rejected if the A and B channels disagree wildly, if fields are missing or
+non-numeric, or if the reading is stale.  If multiple sensors/proxies are
+configured, they are tried in order until one produces a good reading.
 
-If the sensor is an outdoor sensor, the fields inserted are the averages
-of the two sensors.
+No extra database configuration is needed: WeeWX automatically accumulates
+the loop values into each archive record, so `pm1_0`, `pm2_5` and `pm10_0`
+land in the database (and in history graphs) on their own.
 
-Earlier versions of purple-proxy wrote to a separate database.  This is no
-longer the case.
+### The EPA correction
 
-A skin is provided to show a sample report:
+The stored `pm2_5` value is always the
+[2021 US EPA correction](https://www.epa.gov/sites/default/files/2021-05/documents/toolsresourceswebinar_purpleairsmoke_210519b.pdf)
+computed from the raw `cf_1` readings of both channels plus the temperature
+and humidity reported by the sensor:
+
+```
+low  (PAcf_1 <= 343 µg/m³): PM2.5 = 0.52*PAcf_1 - 0.086*RH + 5.75
+high (PAcf_1  > 343 µg/m³): PM2.5 = 0.46*PAcf_1 + 3.93e-4*PAcf_1² + 2.97
+```
+
+The correction has been shown to yield the correct US EPA AQI category 92% of
+the time, and to be at most one category off 100% of the time, across all US
+regions and all conditions (including wildfire smoke).  The uncorrected PM2.5
+is deliberately not stored: the correction requires the sensor's temperature
+and humidity, which are not saved, so it could not be recomputed later.
+
+### AQI categories
+
+`pm2_5_aqi` conforms to the
+[2024 EPA AQI definition](https://www.epa.gov/system/files/documents/2024-02/pm-naaqs-air-quality-index-fact-sheet.pdf);
+`pm2_5_aqi_color` uses the EPA-defined RGB colors:
+
+| Category                       | AQI       | 24-hr PM2.5 (µg/m³) | Color  | RGB           |
+|--------------------------------|-----------|---------------------|--------|---------------|
+| Good                           | 0 - 50    | 0.0 - 9.0           | Green  | (0, 228, 0)   |
+| Moderate                       | 51 - 100  | 9.1 - 35.4          | Yellow | (255, 255, 0) |
+| Unhealthy for Sensitive Groups | 101 - 150 | 35.5 - 55.4         | Orange | (255, 126, 0) |
+| Unhealthy                      | 151 - 200 | 55.5 - 125.4        | Red    | (255, 0, 0)   |
+| Very Unhealthy                 | 201 - 300 | 125.5 - 225.4       | Purple | (143, 63, 151)|
+| Hazardous                      | 301 - 500 | 225.5 - 325.4       | Maroon | (126, 0, 35)  |
+
+Concentrations above 325.4 µg/m³ map to AQI values above 500, continuing on
+the same slope as AQI 301-500 (per the May 2024
+[AirNow Technical Assistance Document](https://document.airnow.gov/technical-assistance-document-for-the-reporting-of-daily-air-quailty.pdf)).
+The category and color remain Hazardous/Maroon.
+
+### Demo skin
+
+A small demo report is installed at `<HTML_ROOT>/purple`:
+
 ![PurpleReport](PurpleReport.jpg)
 
-### What's a purple proxy?
+### What's purple-proxy?
 
-purple-proxy is optional when using weewx-purple.  purple-proxy
-returns an average over the archive period when queried.  Use of purple-proxy
-is not recommended (and strongly discouraged for all but the most Unix/Linux
-savvy.  The install is rather crude and has only been tested on Debian.
-If in doubt, skip purple-proxy and query the PurpleAir devices directly.
+[purple-proxy](https://github.com/chaunceygardiner/purple-proxy) is an
+optional service that averages sensor readings over the archive period.  Its
+install is crude and has only been tested on Debian; use of purple-proxy is
+discouraged for all but the most Unix/Linux savvy.  If in doubt, skip it and
+query the PurpleAir sensor directly.
 
-See `weewx-purple` and `purple-proxy` in action on the following pages:
+See weewx-purple in action:
 * [Weatherboard&trade; Report](https://www.paloaltoweather.com/weatherboard/)
-* [LiveSeasons Report](https://www.paloaltoweather.com/index.html).
+* [LiveSeasons Report](https://www.paloaltoweather.com/index.html)
 
-# Installation Instructions
+# Installation
 
-If you don't meet the following requirements, don't install this extension.
-  * WeeWX 4 or 5
-  * Using WeeWX 4's new wview_extended schema.
-  * Python 3.7 or greater
+1. Find your sensor on the network and verify you can reach it.
 
-## WeeWX 5 Installation Instructions
+   Find the sensor's IP address (e.g., in your router's DHCP client list,
+   or in the PurpleAir registration email), then browse to
+   `http://<sensor-ip>/json`.  You should see a page of JSON sensor data —
+   that is exactly the endpoint this extension polls.  Since the extension
+   needs a stable address, give the sensor a DHCP reservation in your
+   router (or a hostname in local DNS) so its address doesn't change.
 
-1. If pip install,
-   Activate the virtual environment (actual syntax varies by type of WeeWX install):
-   `/home/weewx/weewx-venv/bin/activate`
-   Install the dateutil package.
-   `pip install python-dateutil`
-   Install the requests package.
-   `pip install requests`
+1. Install the prerequisite Python packages.
 
-1. If package install:
-   Install python3's dateutil package.  On debian, that can be accomplished with:
-   `apt install python3-dateutil`
-   Install python3's requests package.  On debian, that can be accomplished with:
-   `apt install python3-requests`
-
-1. Download the lastest release, weewx-purple.zip, from the
-   [GitHub Repository](https://github.com/chaunceygardiner/weewx-purple).
-
-1. Install the purple extension.
-
-   `weectl extension install weewx-purple.zip`
-
-1. Edit the `Purple` section of weewx.conf (which was created by the install
-   above).  PurpleAir sensors are specified with section names of `Sensor1`,
-   `Sensor2`, `Sensor3`, etc.  Proxies are specified as `Proxy1`, `Proxy2`,
-   `Proxy3`, etc.  There is no limit on how many sensors and proxies can
-   be configured; but the numbering must be sonsecutive.  The order in which
-   sensors/proxies are interrogated is first the proxies, low numbers to high;
-   then the sensors, low numbers to high.  Once a proxy or sensor replies,
-   no further proxies/sensors are interrogated for the current polling round.
+   For a WeeWX pip install, activate WeeWX's virtual environment first, then:
 
    ```
-   [Purple]
-       poll_secs = 15
-       [[Sensor]]
-           enable = true
-           hostname = purple-air
-           port = 80
-           timeout = 10
-       [[Sensor2]]
-           enable = false
-           hostname = purple-air2
-           port = 80
-           timeout = 10
-       [[Proxy1]]
-           enable = false
-           hostname = proxy
-           port = 8000
-           timeout = 10
-           starup_timeout = 60
-       [[Proxy2]]
-           enable = false
-           hostname = proxy2
-           port = 8000
-           timeout = 10
-           starup_timeout = 60
-       [[Proxy3]]
-           enable = false
-           hostname = proxy3
-           port = 8000
-           timeout = 10
-           starup_timeout = 60
-       [[Proxy4]]
-           enable = false
-           hostname = proxy4
-           port = 8000
-           timeout = 10
-           starup_timeout = 60
+   pip install python-dateutil requests
    ```
 
-1. If you are Unix/Linux savy, and are willing to work with a crude
-   installation procedure, install
-   [purple-proxy](https://github.com/chaunceygardiner/purple-proxy).
-
-1. Restart WeeWX
-
-1. To check for a successful install, wait for a reporting cycle, then
-   navigate in a browser to the WeeWX site and add /purple to the end
-   of the URL (e.g., http://weewx-machine/weewx/purple).
-   The PM2.5 and AQI graphs will fill in over time.
-
-## WeeWX 4 Installation Instructions
-
-1. Install python3's dateutil package.  On debian, that can be accomplished with:
-
-   `apt install python3-dateutil`
-
-1. Install python3's requests package.  On debian, that can be accomplished with:
-
-   `apt install python3-requests`
-
-1. Download the lastest release, weewx-purple.zip, from the
-   [GitHub Repository](https://github.com/chaunceygardiner/weewx-purple).
-
-1. Run the following command.
-
-   `sudo /home/weewx/bin/wee_extension --install weewx-purple-3.3.zip`
-
-   Note: this command assumes weewx is installed in /home/weewx.  If it's installed
-   elsewhere, adjust the path of wee_extension accordingly.
-
-1. Edit the `Purple` section of weewx.conf (which was created by the install
-   above).  PurpleAir sensors are specified with section names of `Sensor1`,
-   `Sensor2`, `Sensor3`, etc.  Proxies are specified as `Proxy1`, `Proxy2`,
-   `Proxy3`, etc.  There is no limit on how many sensors and proxies can
-   be configured; but the numbering must be sonsecutive.  The order in which
-   sensors/proxies are interrogated is first the proxies, low numbers to high;
-   then the sensors, low numbers to high.  Once a proxy or sensor replies,
-   no further proxies/sensors are interrogated for the current polling round.
+   For a Debian package install of WeeWX:
 
    ```
-   [Purple]
-       poll_secs = 15
-       [[Sensor]]
-           enable = true
-           hostname = purple-air
-           port = 80
-           timeout = 10
-       [[Sensor2]]
-           enable = false
-           hostname = purple-air2
-           port = 80
-           timeout = 10
-       [[Proxy1]]
-           enable = false
-           hostname = proxy
-           port = 8000
-           timeout = 10
-           starup_timeout = 60
-       [[Proxy2]]
-           enable = false
-           hostname = proxy2
-           port = 8000
-           timeout = 10
-           starup_timeout = 60
-       [[Proxy3]]
-           enable = false
-           hostname = proxy3
-           port = 8000
-           timeout = 10
-           starup_timeout = 60
-       [[Proxy4]]
-           enable = false
-           hostname = proxy4
-           port = 8000
-           timeout = 10
-           starup_timeout = 60
+   apt install python3-dateutil python3-requests
    ```
 
-1. If you are Unix/Linux savy, and are willing to work with a crude
-   installation procedure, install
-   [purple-proxy](https://github.com/chaunceygardiner/purple-proxy).
+1. Download the latest release, `weewx-purple.zip`, from the
+   [GitHub repository](https://github.com/chaunceygardiner/weewx-purple).
 
-1. Restart WeeWX
+1. Install the extension and restart WeeWX.
 
-1. To check for a successful install, wait for a reporting cycle, then
-   navigate in a browser to the WeeWX site and add /purple to the end
-   of the URL (e.g., http://weewx-machine/weewx/purple).
-   The PM2.5 and AQI graphs will fill in over time.
+   WeeWX 5:
 
-# How to access weewx-purple fields in reports.
+   ```
+   weectl extension install weewx-purple.zip
+   ```
 
-Detailed instructions are pending, below is a quick and dirty set of instructions.
-At present, one will need to browse the code for more detail.
+   WeeWX 4 (adjust the path if WeeWX is not installed in /home/weewx):
 
-Note: Although the examples below show the use of $current, aggregates are also
-supported (e.g., the high PM2.5 for the week can be presented with `$week.pm2_5.max`.
+   ```
+   sudo /home/weewx/bin/wee_extension --install weewx-purple.zip
+   ```
 
-To show the PM2.5 reading, use the following:
+1. Edit the `[Purple]` section of weewx.conf (created by the install) to
+   point at your sensor, then restart WeeWX.
+
+1. To check the install, wait for a reporting cycle, then browse to the WeeWX
+   site with `/purple` appended to the URL
+   (e.g., `http://weewx-machine/weewx/purple`).  The PM2.5 and AQI graphs
+   fill in over time.
+
+## Configuration
+
 ```
+[Purple]
+    poll_secs = 15
+    [[Sensor1]]
+        enable = true
+        hostname = purple-air
+        port = 80
+        timeout = 15
+    [[Sensor2]]
+        enable = false
+        hostname = purple-air2
+        port = 80
+        timeout = 15
+    [[Proxy1]]
+        enable = false
+        hostname = proxy1
+        port = 8000
+        timeout = 5
+```
+
+| Option      | Default              | Meaning                                          |
+|-------------|----------------------|--------------------------------------------------|
+| `poll_secs` | 15                   | How often to poll for a new reading (seconds)    |
+| `enable`    | false                | Whether this source is polled                    |
+| `hostname`  |                      | Hostname or IP address of the sensor/proxy       |
+| `port`      | 80 (sensor) / 8000 (proxy) | Port to connect on                         |
+| `timeout`   | 10                   | HTTP timeout (seconds)                           |
+
+PurpleAir sensors are specified with subsections `[[Sensor1]]`, `[[Sensor2]]`,
+etc.; purple-proxy services with `[[Proxy1]]`, `[[Proxy2]]`, etc.  There is no
+limit on the number of sensors and proxies, but the numbering of each group
+must start at 1 and be consecutive (a gap ends the scan).  On each polling
+round, proxies are interrogated first (low numbers to high), then sensors;
+the first source that yields a sane, fresh reading wins and no further
+sources are tried.
+
+A reading is considered fresh for `max(120, 3 * poll_secs)` seconds; stale
+readings are never inserted into loop packets.
+
+# Using weewx-purple fields in reports
+
+Current values:
+
+```
+$current.pm1_0
 $current.pm2_5
-```
-
-To show the Air Quality Index:
-```
+$current.pm10_0
 $current.pm2_5_aqi
+$current.pm2_5_aqi_color
 ```
 
-To get the RGBINT color of the current Air Quality Index:
+Aggregates work for both the database-backed fields and the AQI xtypes
+(supported AQI aggregates: `avg`, `min`, `max`, `first`, `last`, `count`):
+
+```
+$day.pm2_5.max
+$week.pm2_5.avg
+$day.pm2_5_aqi.max
+```
+
+Both `pm2_5_aqi` and `pm2_5_aqi_color` can also be graphed, e.g. in
+skin.conf's `[ImageGenerator]` section:
+
+```
+        [[[dayaqi]]]
+            [[[[pm2_5_aqi]]]]
+```
+
+`pm2_5_aqi_color` is an [RGBint](https://www.shodor.org/stella2java/rgbint.html)
+value, useful for displaying the AQI in the color of its category.  To unpack
+it in a Cheetah template:
+
 ```
 #set $color = int($current.pm2_5_aqi_color.raw)
 #set $blue  =  $color & 255
@@ -270,14 +239,28 @@ To get the RGBINT color of the current Air Quality Index:
 #set $red   = ($color >> 16) & 255
 ```
 
-To show the PM1.0 reading, use the following:
-```
-$current.pm1_0
-```
+# Troubleshooting
 
-To show the PM10.0 reading, use the following:
+* `Purple extension is inoperable` in the log: no source has `enable = true`
+  in `[Purple]`.
+* `Found no fresh concentrations to insert.`: the sensor has stopped
+  answering (or is answering with insane readings).  Logged once per outage;
+  `Fresh concentrations available again.` is logged on recovery.
+* `purpleair reading from <host> not sane, ...`: the reason and the offending
+  reading are included in the message.
+* To watch what the collector sees, run the module directly against a sensor:
+
+  ```
+  PYTHONPATH=<weewx-bin-dir> python bin/user/purple.py --test-collector --hostname <sensor> [--port <port>]
+  ```
+
+# Running the test suite
+
+The tests are hermetic (no sensor or network required).  From a Python
+environment with WeeWX installed:
+
 ```
-$current.pm10_0
+PYTHONPATH=bin python -m pytest tests
 ```
 
 ## Licensing

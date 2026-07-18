@@ -18,7 +18,6 @@
 WeeWX module that records PurpleAir air quality sensor readings.
 """
 
-import datetime
 import json
 import logging
 import math
@@ -34,6 +33,7 @@ from dateutil.parser import ParserError
 from dataclasses import dataclass
 from typing import Any, Dict, List, Optional, Tuple
 
+import weeutil.logger
 import weeutil.weeutil
 import weewx
 import weewx.units
@@ -48,7 +48,7 @@ from weewx.engine import StdService
 
 log = logging.getLogger(__name__)
 
-WEEWX_PURPLE_VERSION = "4.1"
+WEEWX_PURPLE_VERSION = "5.0"
 
 if sys.version_info[0] < 3 or (sys.version_info[0] == 3 and sys.version_info[1] < 7):
     raise weewx.UnsupportedFeature(
@@ -80,7 +80,7 @@ weewx.units.obs_group_dict['pm2_5_aqi_color'] = 'air_quality_color'
 class Source:
     def __init__(self, config_dict, name, is_proxy):
         self.is_proxy = is_proxy
-        # Raise KeyEror if name not in dictionary.
+        # Raise KeyError if name not in dictionary.
         source_dict = config_dict[name]
         self.enable = to_bool(source_dict.get('enable', False))
         self.hostname = source_dict.get('hostname', '')
@@ -104,7 +104,6 @@ class Concentrations:
 class Configuration:
     lock            : threading.Lock
     concentrations  : Optional[Concentrations] # Controlled by lock
-    archive_delay   : int                      # Immutable
     poll_secs       : int                      # Immutable
     fresh_secs      : int                      # Immutable
     sources         : List[Source]             # Immutable
@@ -113,9 +112,6 @@ def datetime_from_reading(dt_str):
     dt_str = dt_str.replace('z', 'UTC')
     tzinfos = {'CST': tz.gettz("UTC")}
     return parse(dt_str, tzinfos=tzinfos)
-
-def utc_now():
-    return datetime.datetime.now(tz=tz.gettz("UTC"))
 
 def reraise_if_terminate(e: BaseException) -> None:
     """weewxd stops by raising Terminate from its SIGTERM signal handler --
@@ -138,10 +134,10 @@ def get_concentrations(cfg: Configuration):
                 log.debug('get_concentrations: source: %s' % record)
                 reading_ts = to_int(record['dateTime'])
                 age_of_reading = time.time() - reading_ts
-                # Ignore old readings.  We can't reading of fresh_secs or close to
-                # it because the reading will age before the next time
-                # concentrations are polled.  Reduce fresh_secs - poll_secs by
-                # 5s (as a buffer).
+                # Ignore old readings.  We can't accept a reading of age
+                # fresh_secs (or close to it) because the reading will age
+                # out before the next poll.  Reduce fresh_secs - poll_secs
+                # by 5s (as a buffer).
                 if abs(age_of_reading) > (cfg.fresh_secs - cfg.poll_secs - 5.0):
                     log.info('Ignoring reading from %s:%d--age: %d seconds.' % (
                         source.hostname, source.port, age_of_reading))
@@ -156,7 +152,7 @@ def get_concentrations(cfg: Configuration):
                     current_humidity = to_int(record['current_humidity']),
                 )
                 # If there is a 'b' sensor, add it in and average the readings
-                log.debug('get_concentrations: concentrations BEFORE averaing in b reading: %s' % concentrations)
+                log.debug('get_concentrations: concentrations BEFORE averaging in b reading: %s' % concentrations)
                 if 'pm1_0_atm_b' in record:
                     concentrations.pm1_0        = (concentrations.pm1_0  + to_float(record['pm1_0_atm_b'])) / 2.0
                     concentrations.pm2_5_cf_1_b = to_float(record['pm2_5_cf_1_b'])
@@ -167,11 +163,16 @@ def get_concentrations(cfg: Configuration):
     return None
 
 def check_type(j: Dict[str, Any], t, names: List[str]) -> Tuple[bool, str]:
+    """Check that each named field in j is an instance of t.  JSON parses
+    whole numbers as int, so int is also acceptable where float is expected.
+    bool is never acceptable (JSON true/false parse as bool, a subclass of
+    int)."""
+    acceptable: Tuple[type, ...] = (float, int) if t is float else (t,)
     try:
         for name in names:
-          x = j[name]
-          if not isinstance(x, t):
-              return False, '%s is not an instance of %s: %s' % (name, t, j[name])
+            x = j[name]
+            if isinstance(x, bool) or not isinstance(x, acceptable):
+                return False, '%s is not an instance of %s: %s' % (name, t, j[name])
         return True, ''
     except KeyError as e:
         return False, 'check_type: could not find key: %s' % e
@@ -186,7 +187,7 @@ def exhibits_twenty_fold_delta(val_1: float, val_2: float) -> bool:
     twenty_fold_diff = (val_1 * 20.0) < val_2 or (val_2 * 20.0) < val_1
     if twenty_fold_diff:
         # The twenty_fold_diff could be because 1 reading is close to zero.
-        # As sush, return False if the delta between the readings is < 10.0
+        # As such, return False if the delta between the readings is < 10.0
         if abs(val_1 - val_2) < 10.0:
             return False
     return twenty_fold_diff
@@ -194,11 +195,11 @@ def exhibits_twenty_fold_delta(val_1: float, val_2: float) -> bool:
 def is_sane(j: Dict[str, Any]) -> Tuple[bool, str]:
     if 'DateTime' not in j:
         return False, 'DateTime not found in: %r' % j
+    if not isinstance(j['DateTime'], str):
+        return False, 'DateTime is not a string: %r' % j['DateTime']
     try:
-        time_of_reading = datetime_from_reading(j['DateTime'])
+        datetime_from_reading(j['DateTime'])
     except ParserError:
-        return False, 'DateTime is not an instance of datetime: %s' % j['DateTime']
-    if not isinstance(time_of_reading, datetime.datetime):
         return False, 'DateTime is not an instance of datetime: %s' % j['DateTime']
 
     ok, reason = check_type(j, int, ['current_temp_f','current_humidity','current_dewpoint_f'])
@@ -238,8 +239,6 @@ def is_sane(j: Dict[str, Any]) -> Tuple[bool, str]:
     return True, ''
 
 def collect_data(hostname, port, timeout, proxy = False):
-
-    j = None
     url = 'http://%s:%s/json' % (hostname, port)
 
     try:
@@ -248,23 +247,18 @@ def collect_data(hostname, port, timeout, proxy = False):
         r = requests.get(url=url, timeout=timeout)
         r.raise_for_status()
         log.debug('collect_data: %s returned %r' % (hostname, r))
-        if r:
-            # convert to json
-            j = r.json()
-            log.debug('collect_data: json returned from %s is: %r' % (hostname, j))
-            # Check for sanity
-            sane, reason = is_sane(j)
-            if not sane:
-                log.info('purpleair reading from %s not sane, %s: %s' % (hostname, reason, j))
-                return None
-            time_of_reading = datetime_from_reading(j['DateTime'])
+        # convert to json
+        j = r.json()
+        log.debug('collect_data: json returned from %s is: %r' % (hostname, j))
+        # Check for sanity
+        sane, reason = is_sane(j)
+        if not sane:
+            log.info('purpleair reading from %s not sane, %s: %s' % (hostname, reason, j))
+            return None
+        time_of_reading = datetime_from_reading(j['DateTime'])
     except Exception as e:
         reraise_if_terminate(e)
         log.info('collect_data: Attempt to fetch from: %s failed: %s.' % (hostname, e))
-        j = None
-
-
-    if j is None:
         return None
 
     # create a record
@@ -319,6 +313,7 @@ class Purple(StdService):
 
         self.engine = engine
         self.config_dict = config_dict.get('Purple', {})
+        self.stale_logged = False
 
         poll_secs  = to_int(self.config_dict.get('poll_secs', 15))
         fresh_secs = max(120, 3 * poll_secs)
@@ -326,7 +321,6 @@ class Purple(StdService):
         self.cfg = Configuration(
             lock             = threading.Lock(),
             concentrations   = None,
-            archive_delay    = to_int(config_dict['StdArchive'].get('archive_delay', 15)),
             poll_secs        = poll_secs,
             fresh_secs       = fresh_secs,
             sources          = Purple.configure_sources(self.config_dict))
@@ -351,9 +345,7 @@ class Purple(StdService):
 
             # Start a thread to query proxies and make aqi available to loopdata
             dp: DevicePoller = DevicePoller(self.cfg)
-            t: threading.Thread = threading.Thread(target=dp.poll_device)
-            t.setName('Purple')
-            t.setDaemon(True)
+            t: threading.Thread = threading.Thread(target=dp.poll_device, name='Purple', daemon=True)
             t.start()
 
             self.bind(weewx.NEW_LOOP_PACKET, self.new_loop_packet)
@@ -365,6 +357,9 @@ class Purple(StdService):
             if self.cfg.concentrations is not None and \
                     self.cfg.concentrations.timestamp is not None and \
                     self.cfg.concentrations.timestamp + self.cfg.fresh_secs >= time.time():
+                if self.stale_logged:
+                    log.info('Fresh concentrations available again.')
+                    self.stale_logged = False
                 log.debug('Time of reading being inserted: %s' % timestamp_to_string(self.cfg.concentrations.timestamp))
                 # Insert pm1_0, pm2_5, pm10_0, aqi and aqic into loop packet.
                 if self.cfg.concentrations.pm1_0 is not None:
@@ -377,7 +372,7 @@ class Purple(StdService):
                 if (self.cfg.concentrations.pm2_5_cf_1 is not None
                         and b_reading is not None
                         and self.cfg.concentrations.current_humidity is not None
-                        and self.cfg.concentrations.current_temp_f):
+                        and self.cfg.concentrations.current_temp_f is not None):
                     event.packet['pm2_5'] = AQI.compute_pm2_5_us_epa_correction(
                             self.cfg.concentrations.pm2_5_cf_1, b_reading,
                             self.cfg.concentrations.current_humidity, self.cfg.concentrations.current_temp_f)
@@ -390,8 +385,14 @@ class Purple(StdService):
                 if 'pm2_5_aqi' in event.packet:
                     event.packet['pm2_5_aqi_color'] = AQI.compute_pm2_5_aqi_color(event.packet['pm2_5_aqi'])
             else:
-                log.error('Found no fresh concentrations to insert.')
+                # Log at error level once per outage, not once per loop packet.
+                if not self.stale_logged:
+                    log.error('Found no fresh concentrations to insert.')
+                    self.stale_logged = True
+                else:
+                    log.debug('Found no fresh concentrations to insert.')
 
+    @staticmethod
     def configure_sources(config_dict):
         sources = []
         # Configure Proxies
@@ -414,50 +415,6 @@ class Purple(StdService):
                 break
 
         return sources
-
-    def get_proxy_version(hostname, port, timeout):
-        try:
-            url = 'http://%s:%s/get-version' % (hostname, port)
-            log.debug('get-proxy-version: url: %s' % url)
-            # If the machine was just rebooted, a temporary failure in name
-            # resolution is likely.  As such, try three times.
-            for i in range(3):
-                try:
-                    r = requests.get(url=url, timeout=timeout)
-                    r.raise_for_status()
-                    break
-                except requests.exceptions.ConnectionError as e:
-                    if i < 2:
-                        log.info('%s: Retrying.' % e)
-                        time.sleep(5)
-                    else:
-                        raise e
-            log.debug('get-proxy-version: r: %s' % r)
-            if r is None:
-                log.debug('get-proxy-version: request returned None')
-                return None
-            j = r.json()
-            log.debug('get_proxy_version: returning version %s for %s.' % (j['version'], hostname))
-            return j['version']
-        except Exception as e:
-            log.info('Could not get version from proxy %s: %s.  Down?' % (hostname, e))
-            return None
-
-    def get_earliest_timestamp(hostname, port, timeout):
-        try:
-            url = 'http://%s:%s/get-earliest-timestamp' % (hostname, port)
-            r = requests.get(url=url, timeout=timeout)
-            r.raise_for_status()
-            log.debug('get-earliest-timestamp: r: %s' % r)
-            if r is None:
-                log.debug('get-earliest-timestamp: request returned None')
-                return None
-            j = r.json()
-            log.debug('get_earliest_timestamp: returning earliest timestamp %s for %s.' % (j['timestamp'], hostname))
-            return j['timestamp']
-        except Exception as e:
-            log.debug('Could not get earliest timestamp from proxy %s: %s.  Down?' % (hostname, e))
-            return None
 
 class DevicePoller:
     def __init__(self, cfg: Configuration):
@@ -496,18 +453,16 @@ class AQI(weewx.xtypes.XType):
                  "WHERE dateTime > %(start)s AND dateTime <= %(stop)s AND pm2_5 IS NOT NULL",
         'first': "SELECT pm2_5, usUnits FROM %(table_name)s "
                  "WHERE dateTime = (SELECT MIN(dateTime) FROM %(table_name)s "
-                 "WHERE dateTime > %(start)s AND dateTime <= %(stop)s AND pm2_5 IS NOT NULL",
+                 "WHERE dateTime > %(start)s AND dateTime <= %(stop)s AND pm2_5 IS NOT NULL)",
         'last': "SELECT pm2_5, usUnits FROM %(table_name)s "
                 "WHERE dateTime = (SELECT MAX(dateTime) FROM %(table_name)s "
-                "WHERE dateTime > %(start)s AND dateTime <= %(stop)s AND pm2_5 IS NOT NULL",
+                "WHERE dateTime > %(start)s AND dateTime <= %(stop)s AND pm2_5 IS NOT NULL)",
         'min': "SELECT pm2_5, usUnits FROM %(table_name)s "
                "WHERE dateTime > %(start)s AND dateTime <= %(stop)s AND pm2_5 IS NOT NULL "
                "ORDER BY pm2_5 ASC LIMIT 1;",
         'max': "SELECT pm2_5, usUnits FROM %(table_name)s "
                "WHERE dateTime > %(start)s AND dateTime <= %(stop)s AND pm2_5 IS NOT NULL "
                "ORDER BY pm2_5 DESC LIMIT 1;",
-        'sum': "SELECT SUM(pm2_5), MIN(usUnits) FROM %(table_name)s "
-               "WHERE dateTime > %(start)s AND dateTime <= %(stop)s AND pm2_5 IS NOT NULL)",
     }
 
     day_boundary_avg_min_max_sql_dict = {
@@ -524,7 +479,7 @@ class AQI(weewx.xtypes.XType):
 
     @staticmethod
     def compute_pm2_5_aqi(pm2_5):
-        #             U.S. EPA PM2.5 AQI
+        #             U.S. EPA PM2.5 AQI (May 2024 AirNow TAD)
         #
         #  AQI Category  AQI Value  24-hr PM2.5
         # Good             0 -  50    0.0 -   9.0
@@ -532,24 +487,32 @@ class AQI(weewx.xtypes.XType):
         # USG            101 - 150   35.5 -  55.4
         # Unhealthy      151 - 200   55.5 - 125.4
         # Very Unhealthy 201 - 300  125.5 - 225.4
-        # Hazardous      301 - 500  225.5 and above
+        # Hazardous      301 - 500  225.5 - 325.4
+        #
+        # Concentrations above 325.4 map to AQI values above 500, continuing
+        # on the Hazardous slope (TAD breakpoint-table footnote 4 and the
+        # "AQI values above 500" FAQ).  There is no upper cap.
 
         # The EPA standard for AQI says to truncate PM2.5 to one decimal place.
         # See https://www3.epa.gov/airnow/aqi-technical-assistance-document-sept2018.pdf
         x = math.trunc(pm2_5 * 10) / 10
 
         if x <= 9.0: # Good
-            return round(x / 9.0 * 50)
+            aqi = round(x / 9.0 * 50)
         elif x <= 35.4: # Moderate
-            return round((x - 9.1) / 26.3 * 49.0 + 51.0)
-        elif x <= 55.4: # Unhealthy for senstive
-            return round((x - 35.5) / 19.9 * 49.0 + 101.0)
+            aqi = round((x - 9.1) / 26.3 * 49.0 + 51.0)
+        elif x <= 55.4: # Unhealthy for sensitive groups
+            aqi = round((x - 35.5) / 19.9 * 49.0 + 101.0)
         elif x <= 125.4: # Unhealthy
-            return round((x - 55.5) / 69.9 * 49.0 + 151.0)
+            aqi = round((x - 55.5) / 69.9 * 49.0 + 151.0)
         elif x <= 225.4: # Very Unhealthy
-            return round((x - 125.5) / 99.9 * 99.0 + 201.0)
+            aqi = round((x - 125.5) / 99.9 * 99.0 + 201.0)
         else: # Hazardous
-            return round((x - 225.5) / 199.9 * 199.0 + 301.0)
+            aqi = round((x - 225.5) / 99.9 * 199.0 + 301.0)
+
+        # A negative pm2_5 (only possible if a bogus value reached the
+        # database by some other means) must not map below zero.
+        return max(0, aqi)
 
     @staticmethod
     def compute_pm2_5_aqi_color(pm2_5_aqi):
@@ -573,7 +536,7 @@ class AQI(weewx.xtypes.XType):
         # High Concentration PAcf_1 > 343 μg m-3 : PM2.5 = 0.46 x PAcf_1 + 3.93 x 10**-4 x PAcf_1**2 + 2.97
         #
         avg_cf_1 = (pm2_5_cf_1 + pm2_5_cf_1_b) / 2.0
-        if avg_cf_1 < 343.0:
+        if avg_cf_1 <= 343.0:
             val = 0.52 * avg_cf_1 - 0.086 * current_humidity + 5.75
         else:
             val = 0.46 * avg_cf_1 + 3.93 * 10**-4 * avg_cf_1 ** 2 + 2.97
@@ -604,7 +567,7 @@ class AQI(weewx.xtypes.XType):
             pm2_5 = record['pm2_5']
             if obs_type == 'pm2_5_aqi':
                 value = AQI.compute_pm2_5_aqi(pm2_5)
-            if obs_type == 'pm2_5_aqi_color':
+            else: # pm2_5_aqi_color
                 value = AQI.compute_pm2_5_aqi_color(AQI.compute_pm2_5_aqi(pm2_5))
             t, g = weewx.units.getStandardUnitType(record['usUnits'], obs_type)
             # Form the ValueTuple and return it:
@@ -653,7 +616,7 @@ class AQI(weewx.xtypes.XType):
 
                 if obs_type == 'pm2_5_aqi':
                     value = AQI.compute_pm2_5_aqi(pm2_5)
-                if obs_type == 'pm2_5_aqi_color':
+                else: # pm2_5_aqi_color
                     value = AQI.compute_pm2_5_aqi_color(AQI.compute_pm2_5_aqi(pm2_5))
                 log.debug('get_series(%s): %s - %s - %s' % (obs_type,
                     timestamp_to_string(ts - interval * 60),
@@ -680,8 +643,10 @@ class AQI(weewx.xtypes.XType):
         be done.
 
         aggregate_type: The type of aggregation to be done. For this function, must be 'avg',
-        'sum', 'count', 'first', 'last', 'min', or 'max'. Anything else will cause
-        weewx.UnknownAggregation to be raised.
+        'count', 'first', 'last', 'min', or 'max'. Anything else will cause
+        weewx.UnknownAggregation to be raised.  ('sum' is deliberately not
+        supported: the AQI of summed concentrations is not a meaningful
+        quantity.)
 
         db_manager: An instance of weewx.manager.Manager or subclass.
 
@@ -710,8 +675,15 @@ class AQI(weewx.xtypes.XType):
             'pm2_5_summary_suffix': '_day_pm2_5'
         }
 
-        on_day_boundary = (timespan.stop - timespan.start) % (24 * 3600) == 0
-        log.debug('day_boundary stop: %r start: %r delta: %r modulo: %d on_day_boundary: %s' % (timespan.stop , timespan.start, (timespan.stop - timespan.start), ((timespan.stop - timespan.start) % 3600), on_day_boundary))
+        # The daily summary table can only be used if the timespan covers
+        # whole archive days: both endpoints on local midnight.  A span
+        # whose length merely happens to be a multiple of 24 hours (e.g.,
+        # a trailing 24-hour window) must use the regular archive table.
+        on_day_boundary = (timespan.start != timespan.stop
+                           and weeutil.weeutil.isStartOfDay(timespan.start)
+                           and weeutil.weeutil.isStartOfDay(timespan.stop))
+        log.debug('day_boundary start: %r stop: %r on_day_boundary: %s' % (
+            timespan.start, timespan.stop, on_day_boundary))
         if aggregate_type in list(AQI.day_boundary_avg_min_max_sql_dict.keys()) and on_day_boundary:
             select_stmt = AQI.day_boundary_avg_min_max_sql_dict[aggregate_type] % interpolation_dict
             select_usunits_stmt = AQI.day_boundary_avg_min_max_sql_dict['usUnits'] % interpolation_dict
@@ -735,10 +707,12 @@ class AQI(weewx.xtypes.XType):
             value = None
             std_unit_system = None
 
-        if value is not None:
+        # A count is a count of records; every other aggregate is a pm2_5
+        # concentration that must be converted to an AQI (or color).
+        if value is not None and aggregate_type != 'count':
             if obs_type == 'pm2_5_aqi':
                 value = AQI.compute_pm2_5_aqi(value)
-            if obs_type == 'pm2_5_aqi_color':
+            else: # pm2_5_aqi_color
                 value = AQI.compute_pm2_5_aqi_color(AQI.compute_pm2_5_aqi(value))
         t, g = weewx.units.getStandardUnitType(std_unit_system, obs_type, aggregate_type)
         # Form the ValueTuple and return it:
