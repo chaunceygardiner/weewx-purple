@@ -36,6 +36,7 @@ from typing import Any, Dict, List, Optional, Tuple
 import weeutil.logger
 import weeutil.weeutil
 import weewx
+import weewx.accum
 import weewx.units
 import weewx.xtypes
 
@@ -48,7 +49,7 @@ from weewx.engine import StdService
 
 log = logging.getLogger(__name__)
 
-WEEWX_PURPLE_VERSION = "5.0"
+WEEWX_PURPLE_VERSION = "5.0.1"
 
 if sys.version_info[0] < 3 or (sys.version_info[0] == 3 and sys.version_info[1] < 7):
     raise weewx.UnsupportedFeature(
@@ -339,6 +340,7 @@ class Purple(StdService):
             log.error('No sources configured for purple extension.  Purple extension is inoperable.')
         else:
             weewx.xtypes.xtypes.insert(0, AQI())
+            AQI.register_accumulator_extractors()
 
             with self.cfg.lock:
                 self.cfg.concentrations = get_concentrations(self.cfg)
@@ -445,6 +447,22 @@ class AQI(weewx.xtypes.XType):
 
     def __init__(self):
         pass
+
+    @staticmethod
+    def register_accumulator_extractors() -> None:
+        """Tell the accumulator not to extract the loop-injected AQI fields
+        into archive records.  new_loop_packet computes AQI per loop packet
+        under the same names this xtype serves; without this, WeeWX's default
+        avg extractor would fold a meaningless averaged AQI into the archive
+        record, and $current would use it instead of the xtype during
+        real-time report generation.  extractor = noop drops the fields so
+        lookups fall through to the xtype -- the same pattern WeeWX's own
+        defaults use for windSpeed.  A user's [Accumulator] section takes
+        precedence over these entries."""
+        weewx.accum.accum_dict.extend({
+            'pm2_5_aqi'      : {'extractor': 'noop'},
+            'pm2_5_aqi_color': {'extractor': 'noop'},
+        })
 
     agg_sql_dict = {
         'avg': "SELECT AVG(pm2_5), MIN(usUnits) FROM %(table_name)s "

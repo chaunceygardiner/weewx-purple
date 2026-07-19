@@ -1,6 +1,35 @@
 weewx-purple change history
 ---------------------------
 
+5.0.1 07/19/2026
+----------------
+Action required: none for typical installs.  Only if you added a
+pm2_5_aqi/pm2_5_aqi_color column to your database schema, see below.
+
+- $current.pm2_5_aqi and $current.pm2_5_aqi_color showed wrong,
+  non-integer values in reports generated in real time by weewxd: WeeWX's
+  accumulator folded the loop-injected AQI fields into the archive record
+  with its default avg extractor (an averaged AQI is meaningless -- AQI is
+  a non-linear transform of concentration; an averaged RGB color can
+  belong to no EPA category at all), and $current used that record value
+  instead of the AQI xtype.  (Found via a bug report against the sibling
+  weewx-airlink extension, which shares this code; the bug has existed
+  since AQI was first inserted into loop packets.)  The extension now
+  registers extractor = noop for both fields (the same pattern WeeWX's
+  own defaults use for windSpeed), so archive-record lookups fall through
+  to the xtype and real-time, standalone, and graphed values all agree.
+  An [Accumulator] entry in weewx.conf still takes precedence, so a
+  deliberate override keeps working.
+- If you added an AQI column to your database schema (not suggested by
+  this extension's README, but possible), the accumulator no longer fills
+  it.  Add to weewx.conf:
+      [StdWXCalculate]
+          [[Calculations]]
+              pm2_5_aqi = prefer_hardware
+              pm2_5_aqi_color = prefer_hardware
+  This computes the stored values through the AQI xtype -- correctly
+  EPA-rounded, unlike the averaged values stored before this release.
+
 5.0 07/18/2026
 --------------
 Action required: none for typical installs.  If a report used
