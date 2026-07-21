@@ -1,6 +1,10 @@
 weewx-purple change history
 ---------------------------
 
+5.x (in development)
+--------------------
+- Insane readings are now logged as warnings (were logged as info).
+
 5.0.1 07/19/2026
 ----------------
 Action required: none for typical installs.  Only if you added a

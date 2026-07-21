@@ -254,7 +254,7 @@ def collect_data(hostname, port, timeout, proxy = False):
         # Check for sanity
         sane, reason = is_sane(j)
         if not sane:
-            log.info('purpleair reading from %s not sane, %s: %s' % (hostname, reason, j))
+            log.warning('purpleair reading from %s not sane, %s: %s' % (hostname, reason, j))
             return None
         time_of_reading = datetime_from_reading(j['DateTime'])
     except Exception as e:
