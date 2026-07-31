@@ -7,6 +7,9 @@ inserts particulate concentrations into every WeeWX loop packet.
 
 Copyright (C) 2020-2026 by John A Kline (john@johnkline.com)
 
+[User manual](https://chaunceygardiner.github.io/weewx-purple/) ·
+[GitHub project](https://github.com/chaunceygardiner/weewx-purple)
+
 **Requires:**
 * WeeWX 4 or 5
 * Python 3.7 or greater
@@ -32,7 +35,7 @@ Every loop packet is populated with:
 |-----------|-----------------------------------------------------------------------|
 | `pm1_0`   | PM1.0 concentration (µg/m³), average of the A and B channels          |
 | `pm2_5`   | PM2.5 concentration (µg/m³) with the US EPA correction applied        |
-| `pm10_0`  | PM10.0 concentration (µg/m³), average of the A and B channels         |
+| `pm10_0`  | PM10 concentration (µg/m³), average of the A and B channels           |
 
 Two more observation types are available everywhere in reports and graphs —
 without being stored in the database — via WeeWX
@@ -92,9 +95,31 @@ The category and color remain Hazardous/Maroon.
 
 ### Demo skin
 
-A small demo report is installed at `<HTML_ROOT>/purple`:
+A small demo report is installed at `<HTML_ROOT>/purple`.  It is translatable
+and ships German, French, Dutch and Spanish (see
+[Translations](#translations)):
 
 ![PurpleReport](PurpleReport.jpg)
+
+### Translations
+
+The demo report is translatable through WeeWX's own mechanisms — lang files
+and gettext-style `[Texts]` keys (the English string is the key; a missing
+entry falls back to English one string at a time).  German, French, Dutch and
+Spanish ship (`skins/purple/lang/de.conf`, `fr.conf`, `nl.conf`, `es.conf`;
+corrections welcome — file an issue); select one per report in `weewx.conf`:
+
+```
+[StdReport]
+    [[PurpleReport]]
+        lang = de                # or fr, nl, or es
+```
+
+`[StdReport] [[Defaults]] lang = de` instead switches every skin that ships
+German at once; a skin lacking the language is a logged no-op, not an error.
+Language support needs WeeWX 4.6 or later.  To add a language, copy
+`skins/purple/lang/en.conf` — the reference dictionary, kept exact by a
+test — and translate the values.
 
 ### What's purple-proxy?
 

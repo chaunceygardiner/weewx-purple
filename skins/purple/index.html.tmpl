@@ -4,10 +4,10 @@
 #errorCatcher Echo
 #encoding UTF-8
 <!DOCTYPE html>
-<html lang="en">
+<html lang="$lang">
   <head>
     <meta charset="UTF-8">
-    <title>weewx-purple demo page</title>
+    <title>$gettext("weewx-purple demo page")</title>
     <style>
       .purplenav {
         overflow: hidden;
@@ -32,7 +32,7 @@
   </head>
   <body>
     <div style="text-align:center;font-size:32px;">
-      <div>WeeWX-Purple Demo Page</div>
+      <div>$gettext("WeeWX-Purple Demo Page")</div>
 #if $current.pm2_5_aqi.has_data
 ##
 ## pm2.5_aqi
@@ -44,7 +44,7 @@
 #set $rgbcolor = 'rgb(%d,%d,%d)' % ($red, $green, $blue)
       <div>$obs.label.pm2_5_aqi: <span style='color:$rgbcolor;'>$current.pm2_5_aqi</span></div>
 #else
-      <div>$obs.label.pm2_5_aqi: <span style='color:gray;'>Unavailable</span></div>
+      <div>$obs.label.pm2_5_aqi: <span style='color:gray;'>$gettext("Unavailable")</span></div>
 #end if
     </div>
     <br>
@@ -53,10 +53,10 @@
       <table style="text-align:center;width:40%;margin-left:30%;">
         <tr>
           <td style="background-color:black;text-align:center;">
-            <span id="day" onclick="clickDay()" style="width:25%;" class="active">Day</span>
-            <span id="week" onclick="clickWeek()" style="width:25%;">Week</span>
-            <span id="month" onclick="clickMonth()" style="width:25%;">Month</span>
-            <span id="year" onclick="clickYear()" style="width:25%;">Year</span>
+            <span id="day" onclick="clickDay()" style="width:25%;" class="active">$gettext("Day")</span>
+            <span id="week" onclick="clickWeek()" style="width:25%;">$gettext("Week")</span>
+            <span id="month" onclick="clickMonth()" style="width:25%;">$gettext("Month")</span>
+            <span id="year" onclick="clickYear()" style="width:25%;">$gettext("Year")</span>
           </td>
         </tr>
       </table>

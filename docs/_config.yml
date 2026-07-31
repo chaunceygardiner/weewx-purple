@@ -1,0 +1,6 @@
+# GitHub Pages configuration for https://chaunceygardiner.github.io/weewx-purple/
+theme: jekyll-theme-primer
+title: weewx-purple
+description: "PurpleAir air quality for WeeWX -- EPA-corrected PM2.5 in every loop packet, AQI and its color computed on demand as XTypes"
+plugins:
+  - jekyll-sitemap

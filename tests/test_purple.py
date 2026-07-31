@@ -7,11 +7,15 @@ against an in-memory SQLite database."""
 
 import datetime
 import logging
+import os
+import re
 import sqlite3
 import threading
 import time
 import types
 import unittest
+
+import configobj
 
 from typing import Any, Dict
 from unittest import mock
@@ -1070,6 +1074,107 @@ class TestGetAggregate(unittest.TestCase):
         # Average of the archive rows within the span, (9.0 + 35.4) / 2 = 22.2;
         # the daily summaries (which would give 10.0) must not be consulted.
         self.assertEqual(vt.value, AQI.compute_pm2_5_aqi(22.2))
+
+
+class TestI18n(unittest.TestCase):
+    """The demo skin's translation plumbing -- the same machinery
+    weewx-skyfield/celestial/loopdata ship: [Texts] is gettext-style (the
+    English string IS the key; a report falls back to it one string at a
+    time), observation labels ride [Labels] [[Generic]] and unit labels
+    [Units] [[Labels]], all merged from lang/<lang>.conf over skin.conf."""
+
+    REPO_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    SKIN_DIR = os.path.join(REPO_DIR, 'skins', 'purple')
+    LANG_DIR = os.path.join(SKIN_DIR, 'lang')
+    LANGUAGES = ['en', 'de', 'fr', 'nl', 'es']
+
+    @classmethod
+    def lang_conf(cls, name: str) -> configobj.ConfigObj:
+        return configobj.ConfigObj(os.path.join(cls.LANG_DIR, name),
+                                   encoding='utf-8', file_error=True)
+
+    @classmethod
+    def rendered_keys(cls):
+        """Every translation key the page can render, read from the
+        $gettext("...")/$gettext('...') literals in the template (keys are
+        single-line literals by convention)."""
+        with open(os.path.join(cls.SKIN_DIR, 'index.html.tmpl'),
+                  encoding='utf-8') as f:
+            found = re.findall(r'\$gettext\(\s*(?:"([^"]+)"|\'([^\']+)\')\s*\)',
+                               f.read())
+        assert found
+        return {a or b for a, b in found}
+
+    def test_installer_lists_lang_files(self):
+        # install.py imports weectl's setup module, so scrape it instead of
+        # importing it.
+        with open(os.path.join(self.REPO_DIR, 'install.py'),
+                  encoding='utf-8') as f:
+            installed = set(re.findall(r"'skins/purple/lang/(\w+\.conf)'",
+                                       f.read()))
+        on_disk = {name for name in os.listdir(self.LANG_DIR)
+                   if name.endswith('.conf')}
+        self.assertEqual(installed, on_disk)
+        self.assertEqual(on_disk, {lang + '.conf' for lang in self.LANGUAGES})
+
+    def test_en_conf_ships_exactly_what_renders(self):
+        """Both directions: a rendered key missing from lang/en.conf fails,
+        and an en.conf key nothing renders fails -- the English file is the
+        reference dictionary for translators.  Its [Labels] must mirror
+        skin.conf's fallbacks and its [Units] labels purple.py's defaults."""
+        conf = self.lang_conf('en.conf')
+        shipped = dict(conf['Texts'])
+        rendered = self.rendered_keys()
+        self.assertEqual(sorted(rendered - set(shipped)), [],
+                         'rendered but not in en.conf')
+        self.assertEqual(sorted(set(shipped) - rendered), [],
+                         'in en.conf but never rendered')
+        # English is the identity translation: every value equals its key.
+        self.assertEqual([k for k, v in shipped.items() if v != k], [])
+        skin = configobj.ConfigObj(os.path.join(self.SKIN_DIR, 'skin.conf'),
+                                   encoding='utf-8', file_error=True)
+        self.assertEqual(dict(conf['Labels']['Generic']),
+                         dict(skin['Labels']['Generic']))
+        for unit, label in dict(conf['Units']['Labels']).items():
+            self.assertEqual(label, weewx.units.default_unit_label_dict[unit])
+
+    def test_lang_files_consistent(self):
+        """Every shipped lang file must parse, translate exactly en.conf's
+        keys (a stale key would silently never render; a missing one ships
+        an untranslated string), and carry the same [Labels]/[Units] keys."""
+        en = self.lang_conf('en.conf')
+        for lang in self.LANGUAGES:
+            conf = self.lang_conf(lang + '.conf')
+            self.assertEqual(set(conf['Texts']), set(en['Texts']), lang)
+            for key, val in dict(conf['Texts']).items():
+                self.assertIsInstance(val, str, (lang, key))
+                self.assertTrue(val, (lang, key))
+            self.assertEqual(set(conf['Labels']['Generic']),
+                             set(en['Labels']['Generic']), lang)
+            self.assertEqual(set(conf['Units']['Labels']),
+                             set(en['Units']['Labels']), lang)
+
+    def test_matches_weewx_seasons_vocabulary(self):
+        """The plot-period tabs are copied from WeeWX's own Seasons lang
+        files; if a sibling weewx checkout is present, pin them to it."""
+        seasons_lang = os.path.join(self.REPO_DIR, '..', 'weewx', 'src',
+                                    'weewx_data', 'skins', 'Seasons', 'lang')
+        if not os.path.isdir(seasons_lang):
+            self.skipTest('no ../weewx checkout')
+        ours = self.rendered_keys()
+        for lang in self.LANGUAGES:
+            if lang == 'en':
+                continue
+            seasons = configobj.ConfigObj(
+                os.path.join(seasons_lang, lang + '.conf'),
+                encoding='utf-8', file_error=True)
+            conf = self.lang_conf(lang + '.conf')
+            shared = ours & set(seasons['Texts'])
+            self.assertEqual(shared, {'Day', 'Week', 'Month', 'Year'}, lang)
+            for key in shared:
+                self.assertEqual(conf['Texts'][key], seasons['Texts'][key],
+                                 (lang, key))
+
 
 if __name__ == '__main__':
     unittest.main()
