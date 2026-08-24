@@ -27,8 +27,8 @@ CONFIG="""
     [[PurpleReport]]
         # The "PurpleReport" uses the "purple" skin, which showcases the extension.
         # Images and files are placed in a dedicated subdirectory.
-        HTML_ROOT = public_html/purple
-        enable = false
+        HTML_ROOT = purple
+        enable = true
         skin = purple
 
 [Purple]
