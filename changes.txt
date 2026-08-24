@@ -1,14 +1,19 @@
 weewx-purple change history
 ---------------------------
 
-6.0.1 (in development)
-----------------------
+6.0.1 08/24/2026
+----------------
 - A sensor whose BME280 has failed (or was never fitted) reports no
   temperature, humidity, dewpoint or pressure at all, and its readings
   are rejected.  The log now says so plainly, and names the chips the
   sensor did report finding (hardwarediscovered).  Previously this
   surfaced as a bare missing-key message, which sent users looking for
   a bug in this extension rather than at the sensor.
+- The configuration stanza install.py writes into weewx.conf on a fresh
+  install now carries explanatory comments -- what poll_secs does, that
+  a Proxy is an instance of purple-proxy and a Sensor a piece of
+  hardware, which values to replace.  Contributed by Tom Keffer.  An
+  existing weewx.conf is untouched by an upgrade, as always.
 
 6.0 07/31/2026
 --------------
