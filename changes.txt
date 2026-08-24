@@ -1,8 +1,17 @@
 weewx-purple change history
 ---------------------------
 
-6.0 (in development)
---------------------
+6.0.1 (in development)
+----------------------
+- A sensor whose BME280 has failed (or was never fitted) reports no
+  temperature, humidity, dewpoint or pressure at all, and its readings
+  are rejected.  The log now says so plainly, and names the chips the
+  sensor did report finding (hardwarediscovered).  Previously this
+  surfaced as a bare missing-key message, which sent users looking for
+  a bug in this extension rather than at the sensor.
+
+6.0 07/31/2026
+--------------
 - The demo page is now translatable, entirely through WeeWX's own
   mechanisms.  Every string the page renders is either a gettext-style
   [Texts] key (the English string IS the key, and a report falls back

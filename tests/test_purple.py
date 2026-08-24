@@ -6,6 +6,7 @@ fetch stack down is exercised with mocks, and the xtype SQL paths run
 against an in-memory SQLite database."""
 
 import datetime
+import importlib.util
 import logging
 import os
 import re
@@ -367,6 +368,35 @@ class TestIsSane(unittest.TestCase):
         bad_pkt['pm2.5_aqi_b'] = 21.5
         ok, _ = user.purple.is_sane(bad_pkt)
         self.assertFalse(ok)
+
+    def test_no_environmental_fields_at_all(self):
+        # Sensor with a failed/absent BME280: no temp, humidity, dewpoint or
+        # pressure.  Reported as a dead chip, not as a bare missing key.
+        bad_pkt = VALID_PKT.copy()
+        for field in ['current_temp_f','current_humidity','current_dewpoint_f','pressure']:
+            del bad_pkt[field]
+        bad_pkt['hardwarediscovered'] = '2.0+PMSX003-B+PMSX003-A'
+        ok, reason = user.purple.is_sane(bad_pkt)
+        self.assertFalse(ok)
+        self.assertIn('has the BME280 failed?', reason)
+        self.assertIn('2.0+PMSX003-B+PMSX003-A', reason)
+
+    def test_no_environmental_fields_and_no_hardwarediscovered(self):
+        bad_pkt = VALID_PKT.copy()
+        for field in ['current_temp_f','current_humidity','current_dewpoint_f','pressure']:
+            del bad_pkt[field]
+        bad_pkt.pop('hardwarediscovered', None)
+        ok, reason = user.purple.is_sane(bad_pkt)
+        self.assertFalse(ok)
+        self.assertIn('<not reported>', reason)
+
+    def test_some_environmental_fields_still_reports_missing_key(self):
+        # Only humidity missing: the BME280 is alive, so keep the precise reason.
+        bad_pkt = VALID_PKT.copy()
+        del bad_pkt['current_humidity']
+        ok, reason = user.purple.is_sane(bad_pkt)
+        self.assertFalse(ok)
+        self.assertEqual(reason, "check_type: could not find key: 'current_humidity'")
 
     def test_bad_temp(self):
         bad_pkt = VALID_PKT.copy()
@@ -1074,6 +1104,67 @@ class TestGetAggregate(unittest.TestCase):
         # Average of the archive rows within the span, (9.0 + 35.4) / 2 = 22.2;
         # the daily summaries (which would give 10.0) must not be consulted.
         self.assertEqual(vt.value, AQI.compute_pm2_5_aqi(22.2))
+
+
+class TestInstallerConfig(unittest.TestCase):
+    """install.py's [StdReport] and [Purple] defaults.  These are only ever
+    read on a fresh `weectl extension install`, so a wrong value ships
+    silently: weecfg merges the stanza with conditional_merge, which fills in
+    absent keys only and never rewrites an existing weewx.conf."""
+
+    REPO_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
+    @classmethod
+    def installer_config(cls):
+        """install.py's config stanza, whichever form it is written in.
+        Loading it needs weecfg.extension imported first: that module aliases
+        itself as 'setup' in sys.modules for installers written against the
+        pre-5.0 name, which is what install.py's own import resolves
+        through."""
+        importlib.import_module('weecfg.extension')  # registers the alias
+        spec = importlib.util.spec_from_file_location(
+            'purple_install', os.path.join(cls.REPO_DIR, 'install.py'))
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        return module.PurpleInstaller()['config']
+
+    def test_html_root_is_a_bare_subdirectory(self):
+        """HTML_ROOT must NOT carry a public_html prefix.  weecfg prepends the
+        installation's own StdReport HTML_ROOT at install time
+        (ExtensionEngine.install_config -> prepend_path), so 'purple' becomes
+        public_html/purple -- or whatever that installation uses.  Writing
+        'public_html/purple' here would land the report in
+        public_html/public_html/purple."""
+        report = self.installer_config()['StdReport']['PurpleReport']
+        self.assertEqual(report['HTML_ROOT'], 'purple')
+        self.assertEqual(report['skin'], 'purple')
+
+    def test_demo_report_is_enabled_by_default(self):
+        # The demo page is meant to render without the user turning it on.
+        report = self.installer_config()['StdReport']['PurpleReport']
+        self.assertTrue(weeutil.weeutil.to_bool(report['enable']))
+
+    def test_source_defaults(self):
+        """One sensor enabled, every proxy and the second sensor off.  Values
+        are compared through to_bool/to_int because a ConfigObj stanza yields
+        strings where a plain dict yields bools and ints -- the installed
+        weewx.conf is text either way, and purple.py coerces on read."""
+        purple = self.installer_config()['Purple']
+        self.assertEqual(weeutil.weeutil.to_int(purple['poll_secs']), 15)
+        for name in ['Proxy1', 'Proxy2', 'Proxy3', 'Proxy4']:
+            source = purple[name]
+            self.assertFalse(weeutil.weeutil.to_bool(source['enable']), name)
+            self.assertEqual(weeutil.weeutil.to_int(source['port']), 8000, name)
+            self.assertEqual(weeutil.weeutil.to_int(source['timeout']), 5, name)
+        self.assertEqual(purple['Proxy1']['hostname'], 'proxy1')
+        self.assertTrue(weeutil.weeutil.to_bool(purple['Sensor1']['enable']))
+        self.assertFalse(weeutil.weeutil.to_bool(purple['Sensor2']['enable']))
+        for name in ['Sensor1', 'Sensor2']:
+            source = purple[name]
+            self.assertEqual(weeutil.weeutil.to_int(source['port']), 80, name)
+            self.assertEqual(weeutil.weeutil.to_int(source['timeout']), 15, name)
+        self.assertEqual(purple['Sensor1']['hostname'], 'purple-air')
+        self.assertEqual(purple['Sensor2']['hostname'], 'purple-air2')
 
 
 class TestI18n(unittest.TestCase):

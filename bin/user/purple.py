@@ -203,6 +203,16 @@ def is_sane(j: Dict[str, Any]) -> Tuple[bool, str]:
     except ParserError:
         return False, 'DateTime is not an instance of datetime: %s' % j['DateTime']
 
+    # A sensor whose BME280 has failed (or was never fitted) reports none of the
+    # environmental fields at all.  Say so plainly: the bare missing-key reason
+    # below sends users looking for a bug in this extension rather than at the
+    # sensor.  hardwarediscovered names the chips the sensor did find.
+    env_fields = ['current_temp_f','current_humidity','current_dewpoint_f','pressure']
+    if not any(field in j for field in env_fields):
+        return False, ('sensor reported no temperature, humidity, dewpoint or pressure'
+            ' (has the BME280 failed?); hardwarediscovered: %s' % j.get(
+            'hardwarediscovered', '<not reported>'))
+
     ok, reason = check_type(j, int, ['current_temp_f','current_humidity','current_dewpoint_f'])
     if not ok:
         return False, reason
