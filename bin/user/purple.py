@@ -603,7 +603,18 @@ class Purple(StdService):
         end_ts = to_int(record['dateTime'])
         # The record's own interval, not the configured archive interval: on a
         # long catchup a logger's records need not fall on archive boundaries.
-        interval_secs = to_int(record.get('interval', 0)) * 60
+        # `or 0`, not a get() default: a record read back out of a database can
+        # carry interval as NULL, which a default for an absent key never sees,
+        # and to_float(None) is None.  The TypeError that would follow is ahead
+        # of the try below and would take weewxd down.
+        # to_float and not to_int: under software record generation WeeWX sets
+        # interval to archive_interval / 60, which is fractional for an archive
+        # interval that is not a whole number of minutes -- 90 seconds arrives
+        # as 1.5, and truncating it would ask the proxy for a 60 second window
+        # on a 90 second period.  round() puts it back to an int, which
+        # backfill_values and the proxy URL's %d both want, and absorbs the
+        # float error that would otherwise turn 100 seconds into 99.
+        interval_secs = round(to_float(record.get('interval') or 0) * 60)
         if interval_secs <= 0:
             interval_secs = self.archive_interval
         start_ts = end_ts - interval_secs

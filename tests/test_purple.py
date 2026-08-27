@@ -1016,6 +1016,44 @@ class TestNewArchiveRecord(unittest.TestCase):
         args, _ = fetch.call_args
         self.assertEqual(args[1], end_ts - 300)
 
+    def test_a_null_interval_does_not_take_weewxd_down(self):
+        # A record read back out of a database can carry interval as NULL,
+        # which a default for an absent key never sees.  This runs on the main
+        # thread ahead of the guarded fetch, so a TypeError here would stop
+        # weewxd.  Fall back to the archive interval instead.
+        end_ts = int(time.time()) - 86400
+        record = self.make_record(end_ts, interval=None)
+        fetch = self.fire(record, self.proxy_records)
+        args, _ = fetch.call_args
+        self.assertEqual(args[1], end_ts - 300)
+        for obs in user.purple.PM_OBS:
+            self.assertAlmostEqual(record[obs], self.expected[obs])
+
+    def test_a_fractional_interval_is_not_truncated(self):
+        # Under software record generation WeeWX sets interval to
+        # archive_interval / 60, so an archive interval that is not a whole
+        # number of minutes arrives fractional: 90 seconds as 1.5.
+        end_ts = int(time.time()) - 86400
+        self.p.archive_interval = 90
+        record = self.make_record(end_ts, interval=1.5)
+        fetch = self.fire(record, self.proxy_records)
+        args, _ = fetch.call_args
+        self.assertEqual(args[1], end_ts - 90)
+
+    def test_a_reading_inside_a_fractional_period_counts_as_seen(self):
+        # Truncating 1.5 to one minute would put the window's start 30
+        # seconds inside the period, and this injection would fall outside
+        # it -- so we would backfill a period we contributed to.
+        end_ts = int(time.time()) - 86400
+        self.p.archive_interval = 90
+        for obs in user.purple.PM_OBS:
+            self.p.injections[obs] = [end_ts - 80]
+        record = self.make_record(end_ts, interval=1.5)
+        fetch = self.fire(record, self.proxy_records)
+        fetch.assert_not_called()
+        for obs in user.purple.PM_OBS:
+            self.assertNotIn(obs, record)
+
     def test_just_closed_period_falls_back_to_current_reading(self):
         # The proxy writes a period's record on its first poll at or past the
         # boundary -- usually after WeeWX has archived the period.

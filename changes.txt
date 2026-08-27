@@ -1,6 +1,23 @@
 weewx-purple change history
 ---------------------------
 
+7.0.1 (in development)
+----------------------
+- An archive record whose interval is NULL no longer stops WeeWX.  The
+  archive backfill added in 7.0 reads the record's own interval to work
+  out the period it covers; a record that carries no value at all for it
+  raised an error on WeeWX's main thread, which brings weewxd down with a
+  traceback pointing at this extension.  Such a record now falls back to
+  the configured archive interval, as one that omits the field entirely
+  always has.
+- The archive backfill now asks a proxy for the whole of the period it is
+  filling, on an archive interval that is not a whole number of minutes.
+  WeeWX reports the interval of such a record in fractional minutes -- 90
+  seconds as 1.5 -- and the fraction was being dropped, so the backfill
+  asked for the last 60 seconds of a 90 second period.  Affects software
+  record generation only; with hardware record generation the interval
+  comes from the console.
+
 7.0 08/26/2026
 --------------
 - ACTION REQUIRED for existing installations that poll a purple-proxy:
