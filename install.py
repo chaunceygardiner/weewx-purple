@@ -43,22 +43,22 @@ CONFIG="""
         enable = False
         hostname = proxy1
         port = 8000
-        timeout = 5
+        timeout = 1
     [[Proxy2]]
         enable = False
         hostname = proxy2
         port = 8000
-        timeout = 5
+        timeout = 1
     [[Proxy3]]
         enable = False
         hostname = proxy3
         port = 8000
-        timeout = 5
+        timeout = 1
     [[Proxy4]]
         enable = False
         hostname = proxy4
         port = 8000
-        timeout = 5
+        timeout = 1
 
     # Sensors are hardware instances
     [[Sensor1]]
@@ -93,7 +93,7 @@ def loader():
 class PurpleInstaller(ExtensionInstaller):
     def __init__(self):
         super(PurpleInstaller, self).__init__(
-            version="6.0.1",
+            version="7.0",
             name='purple',
             description='Collect air quality readings from PurpleAir sensors (or purple-proxy).',
             author="John A Kline",

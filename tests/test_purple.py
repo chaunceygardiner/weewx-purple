@@ -592,6 +592,9 @@ class TestConfigureSources(unittest.TestCase):
         self.assertEqual(sensor.timeout, 10)
         proxy = make_source('Proxy1', is_proxy=True)
         self.assertEqual(proxy.port, 8000)
+        # A proxy answers from its own database on the local network, and its
+        # timeout also bounds the archive backfill on the main thread.
+        self.assertEqual(proxy.timeout, 1)
         # enable defaults to False, and parses strings.
         s = Source({'Sensor1': {'hostname': 'h'}}, 'Sensor1', False)
         self.assertFalse(s.enable)
@@ -677,12 +680,16 @@ class TestGetConcentrations(unittest.TestCase):
 class TestNewLoopPacket(unittest.TestCase):
 
     @staticmethod
-    def make_purple(concentrations):
+    def make_purple(concentrations, sources=None):
         # Build a Purple without running __init__ (which needs an engine
         # and does a synchronous fetch).
         p = Purple.__new__(Purple)
-        p.cfg = make_cfg(concentrations=concentrations)
+        p.cfg = make_cfg(sources=sources, concentrations=concentrations)
         p.stale_logged = False
+        p.archive_interval = 300
+        p.injections = {obs: [] for obs in user.purple.PM_OBS}
+        p.injection_retention_secs = 600
+        p.proxy_retry_after = {}
         return p
 
     @staticmethod
@@ -776,6 +783,367 @@ class TestNewLoopPacket(unittest.TestCase):
         p.new_loop_packet(types.SimpleNamespace(packet={}))
         self.assertFalse(p.stale_logged)
 
+class TestInjectionTally(unittest.TestCase):
+    """What this extension put into loop packets is the only evidence at
+    hand that an archive period's accumulator has anything in it."""
+
+    def make_purple(self):
+        return TestNewLoopPacket.make_purple(
+            TestNewLoopPacket.fresh_concentrations())
+
+    def test_loop_packet_records_what_was_injected(self):
+        p = self.make_purple()
+        p.new_loop_packet(types.SimpleNamespace(packet={'dateTime': 1000.0}))
+        for obs in user.purple.PM_OBS:
+            self.assertEqual(p.injections[obs], [1000.0])
+
+    def test_only_injected_observations_are_recorded(self):
+        # No humidity means no pm2_5 (and no AQI), but pm1_0 and pm10_0 go in.
+        p = TestNewLoopPacket.make_purple(
+            TestNewLoopPacket.fresh_concentrations(current_humidity=None))
+        p.new_loop_packet(types.SimpleNamespace(packet={'dateTime': 1000.0}))
+        self.assertEqual(p.injections['pm1_0'], [1000.0])
+        self.assertEqual(p.injections['pm10_0'], [1000.0])
+        self.assertEqual(p.injections['pm2_5'], [])
+
+    def test_stale_concentrations_record_nothing(self):
+        p = TestNewLoopPacket.make_purple(
+            TestNewLoopPacket.fresh_concentrations(timestamp=time.time() - 121))
+        p.new_loop_packet(types.SimpleNamespace(packet={'dateTime': 1000.0}))
+        self.assertEqual(p.injections['pm2_5'], [])
+
+    def test_old_injections_pruned(self):
+        p = self.make_purple()
+        p.new_loop_packet(types.SimpleNamespace(packet={'dateTime': 1000.0}))
+        # 601 seconds later: outside the two-archive-interval retention.
+        p.new_loop_packet(types.SimpleNamespace(packet={'dateTime': 1601.0}))
+        self.assertEqual(p.injections['pm2_5'], [1601.0])
+
+    def test_injected_in_window_is_start_exclusive_end_inclusive(self):
+        # The WeeWX archive period is (dateTime - interval, dateTime].
+        p = self.make_purple()
+        p.injections['pm2_5'] = [1000.0]
+        self.assertTrue(p.injected_in('pm2_5', 700.0, 1000.0))
+        self.assertFalse(p.injected_in('pm2_5', 1000.0, 1300.0))
+        self.assertFalse(p.injected_in('pm2_5', 400.0, 700.0))
+
+class TestFetchProxyArchiveRecords(unittest.TestCase):
+
+    def setUp(self):
+        self.source = make_source('Proxy1', is_proxy=True, hostname='proxy', port=8000, timeout=7)
+
+    def test_url_carries_the_weewx_period(self):
+        # purple-proxy's since_ts is exclusive and max_ts inclusive -- exactly
+        # a WeeWX archive period, so no off-by-one adjustment is needed.
+        with mock.patch('user.purple.requests.get',
+                        return_value=FakeResponse([])) as get:
+            records = user.purple.fetch_proxy_archive_records(self.source, 1000, 1300)
+        self.assertEqual(records, [])
+        _, kwargs = get.call_args
+        self.assertEqual(
+            kwargs['url'],
+            'http://proxy:8000/fetch-archive-records?since_ts=1000,max_ts=1300')
+        self.assertEqual(kwargs['timeout'], 7)   # the source's configured timeout
+
+    def test_records_are_populated(self):
+        with mock.patch('user.purple.requests.get',
+                        return_value=FakeResponse([VALID_PKT])):
+            records = user.purple.fetch_proxy_archive_records(self.source, 1000, 1300)
+        self.assertEqual(len(records), 1)
+        self.assertEqual(records[0]['pm2_5_cf_1'], 5.00)
+        self.assertEqual(records[0]['pm2_5_cf_1_b'], 5.00)
+
+    def test_insane_records_dropped_sane_ones_kept(self):
+        insane = dict(VALID_PKT)
+        del insane['pm2_5_cf_1']
+        with mock.patch('user.purple.requests.get',
+                        return_value=FakeResponse([insane, VALID_PKT])):
+            records = user.purple.fetch_proxy_archive_records(self.source, 1000, 1300)
+        self.assertEqual(len(records), 1)
+
+    def test_unreachable_proxy_returns_none(self):
+        # None (could not ask) is not the same as [] (asked, nothing there).
+        with mock.patch('user.purple.requests.get',
+                        side_effect=Exception('connection refused')):
+            self.assertIsNone(
+                user.purple.fetch_proxy_archive_records(self.source, 1000, 1300))
+
+    def test_non_dict_element_returns_none(self):
+        # A port pointed at some other service can return well-formed json
+        # that is nothing like a list of readings.  This runs on the main
+        # thread: anything that escapes takes weewxd down.
+        with mock.patch('user.purple.requests.get',
+                        return_value=FakeResponse([1, 2, 3])):
+            self.assertIsNone(
+                user.purple.fetch_proxy_archive_records(self.source, 1000, 1300))
+
+    def test_non_list_response_returns_none(self):
+        with mock.patch('user.purple.requests.get',
+                        return_value=FakeResponse({'error': 'bad request'})):
+            self.assertIsNone(
+                user.purple.fetch_proxy_archive_records(self.source, 1000, 1300))
+
+    def test_terminate_passes_through(self):
+        # A main-thread path: weewxd's shutdown must not be swallowed.
+        with mock.patch('user.purple.requests.get', side_effect=Terminate('shutdown')):
+            with self.assertRaises(Terminate):
+                user.purple.fetch_proxy_archive_records(self.source, 1000, 1300)
+
+class TestAveragePmValues(unittest.TestCase):
+
+    def test_corrected_values_are_averaged(self):
+        # Correct each record, then average -- not the other way around.
+        hazy = dict(VALID_PKT)
+        for key in ['pm2_5_cf_1', 'pm2_5_cf_1_b', 'pm2_5_atm', 'pm2_5_atm_b']:
+            hazy[key] = 40.00
+        records = [user.purple.populate_record(1000, VALID_PKT),
+                   user.purple.populate_record(1300, hazy)]
+        values = user.purple.average_pm_values(records)
+        expected = (AQI.compute_pm2_5_us_epa_correction(5.0, 5.0, 35, 69)
+                    + AQI.compute_pm2_5_us_epa_correction(40.0, 40.0, 35, 69)) / 2.0
+        self.assertAlmostEqual(values['pm2_5'], expected)
+        # pm1_0 and pm10_0 are the atm values, averaged across the channels.
+        self.assertAlmostEqual(values['pm1_0'], 3.0)
+        self.assertAlmostEqual(values['pm10_0'], 5.5)
+
+    def test_partial_b_channel_record_does_not_raise(self):
+        # is_sane gates its b-channel checks on 'pm2.5_aqi_b', so a record can
+        # carry one _b field and not another and still be judged sane.  This
+        # runs on the main thread: a KeyError here would stop weewxd.
+        partial = dict(VALID_PKT)
+        for key in ['pm2_5_cf_1_b', 'pm10_0_atm_b', 'pm2.5_aqi_b']:
+            del partial[key]
+        values = user.purple.average_pm_values(
+            [user.purple.populate_record(1000, partial)])
+        # The a/b average is taken only where both channels are present.
+        self.assertAlmostEqual(values['pm1_0'], 3.0)
+        self.assertAlmostEqual(values['pm10_0'], 5.0)
+        self.assertAlmostEqual(
+            values['pm2_5'], AQI.compute_pm2_5_us_epa_correction(5.0, 5.0, 35, 69))
+
+    def test_single_sensor_records(self):
+        records = [user.purple.populate_record(1000, a_only_pkt())]
+        values = user.purple.average_pm_values(records)
+        self.assertAlmostEqual(
+            values['pm2_5'], AQI.compute_pm2_5_us_epa_correction(5.0, 5.0, 35, 69))
+        self.assertAlmostEqual(values['pm10_0'], 5.0)
+
+class TestNewArchiveRecord(unittest.TestCase):
+    """Backfilling the periods this extension never saw.  The proxy fetch is
+    mocked throughout: what is under test is the decision to fetch, and what
+    is done with the answer."""
+
+    def setUp(self):
+        self.proxy = make_source('Proxy1', is_proxy=True, hostname='proxy', port=8000)
+        self.p = TestNewLoopPacket.make_purple(
+            TestNewLoopPacket.fresh_concentrations(), sources=[self.proxy])
+        self.proxy_records = [user.purple.populate_record(1000, VALID_PKT)]
+        self.expected = user.purple.average_pm_values(self.proxy_records)
+
+    def make_record(self, end_ts, interval=5, **fields):
+        record = {'dateTime': end_ts, 'usUnits': weewx.US, 'interval': interval}
+        record.update(fields)
+        return record
+
+    def fire(self, record, fetched=None):
+        with mock.patch('user.purple.fetch_proxy_archive_records',
+                        return_value=fetched) as fetch:
+            self.p.new_archive_record(types.SimpleNamespace(record=record))
+        return fetch
+
+    def test_period_we_injected_into_is_left_alone(self):
+        end_ts = int(time.time())
+        # One loop packet's worth of pm inside the period is enough: the
+        # accumulator has samples, and under hardware record generation it
+        # grafts them on after this handler runs.
+        for obs in user.purple.PM_OBS:
+            self.p.injections[obs] = [end_ts - 10]
+        record = self.make_record(end_ts)
+        fetch = self.fire(record, self.proxy_records)
+        fetch.assert_not_called()
+        for obs in user.purple.PM_OBS:
+            self.assertNotIn(obs, record)
+
+    def test_period_we_missed_is_filled_from_proxy_archive(self):
+        end_ts = int(time.time()) - 86400
+        record = self.make_record(end_ts)
+        fetch = self.fire(record, self.proxy_records)
+        args, _ = fetch.call_args
+        self.assertEqual(args[1], end_ts - 300)   # since_ts: period start
+        self.assertEqual(args[2], end_ts)         # max_ts:   period end
+        for obs in user.purple.PM_OBS:
+            self.assertAlmostEqual(record[obs], self.expected[obs])
+
+    def test_present_but_none_is_filled(self):
+        # Software record generation: the accumulator has already had its say
+        # and wrote None for a type it holds with no usable values.
+        end_ts = int(time.time()) - 86400
+        record = self.make_record(end_ts, pm1_0=None, pm2_5=None, pm10_0=None)
+        self.fire(record, self.proxy_records)
+        for obs in user.purple.PM_OBS:
+            self.assertAlmostEqual(record[obs], self.expected[obs])
+
+    def test_values_the_accumulator_supplied_are_not_overwritten(self):
+        # Software record generation, a period with samples in it.
+        end_ts = int(time.time()) - 86400
+        record = self.make_record(end_ts, pm1_0=1.0, pm2_5=2.0, pm10_0=3.0)
+        fetch = self.fire(record, self.proxy_records)
+        fetch.assert_not_called()
+        self.assertEqual((record['pm1_0'], record['pm2_5'], record['pm10_0']),
+                         (1.0, 2.0, 3.0))
+
+    def test_backfill_is_per_observation(self):
+        end_ts = int(time.time()) - 86400
+        self.p.injections['pm1_0'] = [end_ts - 10]
+        record = self.make_record(end_ts)
+        self.fire(record, self.proxy_records)
+        self.assertNotIn('pm1_0', record)
+        self.assertAlmostEqual(record['pm2_5'], self.expected['pm2_5'])
+        self.assertAlmostEqual(record['pm10_0'], self.expected['pm10_0'])
+
+    def test_records_own_interval_sets_the_window(self):
+        # A logger's catchup records need not be on archive boundaries.
+        end_ts = int(time.time()) - 86400
+        record = self.make_record(end_ts, interval=17)
+        fetch = self.fire(record, self.proxy_records)
+        args, _ = fetch.call_args
+        self.assertEqual(args[1], end_ts - 17 * 60)
+
+    def test_missing_interval_falls_back_to_archive_interval(self):
+        end_ts = int(time.time()) - 86400
+        record = {'dateTime': end_ts, 'usUnits': weewx.US}
+        fetch = self.fire(record, self.proxy_records)
+        args, _ = fetch.call_args
+        self.assertEqual(args[1], end_ts - 300)
+
+    def test_just_closed_period_falls_back_to_current_reading(self):
+        # The proxy writes a period's record on its first poll at or past the
+        # boundary -- usually after WeeWX has archived the period.
+        end_ts = int(time.time())
+        record = self.make_record(end_ts)
+        self.fire(record, [])
+        conc = self.p.cfg.concentrations
+        self.assertAlmostEqual(record['pm2_5'], user.purple.compute_pm_values(conc)['pm2_5'])
+
+    def test_period_older_than_the_two_minute_average_is_left_alone(self):
+        # A startup catchup after a correlated outage: WeeWX and the proxies
+        # were down together, so no proxy holds the period.  A reading of the
+        # last two minutes says nothing about a period that closed before that
+        # span began -- leave the columns empty.
+        end_ts = int(time.time()) - 121
+        record = self.make_record(end_ts)
+        self.fire(record, [])
+        for obs in user.purple.PM_OBS:
+            self.assertNotIn(obs, record)
+
+    def test_period_within_the_two_minute_average_is_filled(self):
+        # Down across a boundary and back a minute later: the two minute
+        # average still overlaps the period, so it stands in nicely.
+        end_ts = int(time.time()) - 60
+        record = self.make_record(end_ts)
+        self.fire(record, [])
+        conc = self.p.cfg.concentrations
+        self.assertAlmostEqual(record['pm2_5'], user.purple.compute_pm_values(conc)['pm2_5'])
+
+    def test_old_period_does_not_fall_back_to_current_reading(self):
+        # A current reading says nothing about a period hours ago.
+        end_ts = int(time.time()) - 86400
+        record = self.make_record(end_ts)
+        self.fire(record, [])
+        for obs in user.purple.PM_OBS:
+            self.assertNotIn(obs, record)
+
+    def test_stale_concentrations_are_not_used_for_the_fallback(self):
+        end_ts = int(time.time())
+        with self.p.cfg.lock:
+            self.p.cfg.concentrations = TestNewLoopPacket.fresh_concentrations(
+                timestamp=time.time() - 121)
+        record = self.make_record(end_ts)
+        self.fire(record, [])
+        for obs in user.purple.PM_OBS:
+            self.assertNotIn(obs, record)
+
+    def test_unreachable_proxy_leaves_the_record_alone(self):
+        end_ts = int(time.time()) - 86400
+        record = self.make_record(end_ts)
+        self.fire(record, None)
+        for obs in user.purple.PM_OBS:
+            self.assertNotIn(obs, record)
+
+    def test_second_proxy_consulted_when_the_first_has_nothing(self):
+        proxy2 = make_source('Proxy2', is_proxy=True, hostname='proxy2', port=8000)
+        sensor = make_source('Sensor1', is_proxy=False, hostname='sensor')
+        self.p.cfg = make_cfg(sources=[self.proxy, proxy2, sensor],
+                              concentrations=self.p.cfg.concentrations)
+        end_ts = int(time.time()) - 86400
+        record = self.make_record(end_ts)
+        with mock.patch('user.purple.fetch_proxy_archive_records',
+                        side_effect=[None, self.proxy_records]) as fetch:
+            self.p.new_archive_record(types.SimpleNamespace(record=record))
+        # Both proxies asked, in configured order; the sensor never is.
+        self.assertEqual([call.args[0].hostname for call in fetch.call_args_list],
+                         ['proxy', 'proxy2'])
+        self.assertAlmostEqual(record['pm2_5'], self.expected['pm2_5'])
+
+    def test_unreachable_proxy_is_not_asked_again_this_period(self):
+        # A startup catchup hands over its records back to back; waiting out
+        # the timeout for each of them adds up, and buys nothing.
+        end_ts = int(time.time()) - 86400
+        with mock.patch('user.purple.fetch_proxy_archive_records',
+                        return_value=None) as fetch:
+            for n in range(5):
+                self.p.new_archive_record(types.SimpleNamespace(
+                    record=self.make_record(end_ts + n * 300)))
+        fetch.assert_called_once()
+
+    def test_unreachable_proxy_is_asked_again_after_an_archive_interval(self):
+        end_ts = int(time.time()) - 86400
+        with mock.patch('user.purple.fetch_proxy_archive_records',
+                        return_value=None) as fetch:
+            self.p.new_archive_record(types.SimpleNamespace(record=self.make_record(end_ts)))
+            # Pretend the cooldown has expired.
+            self.p.proxy_retry_after = {key: 0.0 for key in self.p.proxy_retry_after}
+            self.p.new_archive_record(types.SimpleNamespace(record=self.make_record(end_ts + 300)))
+        self.assertEqual(fetch.call_count, 2)
+
+    def test_reachable_proxy_with_nothing_is_asked_again(self):
+        # An empty answer is not a failure: for the period that just closed
+        # the proxy simply has not written its record yet.
+        end_ts = int(time.time()) - 86400
+        with mock.patch('user.purple.fetch_proxy_archive_records',
+                        return_value=[]) as fetch:
+            self.p.new_archive_record(types.SimpleNamespace(record=self.make_record(end_ts)))
+            self.p.new_archive_record(types.SimpleNamespace(record=self.make_record(end_ts + 300)))
+        self.assertEqual(fetch.call_count, 2)
+
+    def test_a_failing_backfill_never_escapes(self):
+        # Main thread: an exception here would go up through dispatchEvent and
+        # stop weewxd.  The record is left as it arrived.
+        end_ts = int(time.time()) - 86400
+        record = self.make_record(end_ts)
+        with mock.patch.object(self.p, 'backfill_values',
+                               side_effect=KeyError('pm2_5_cf_1_b')):
+            self.p.new_archive_record(types.SimpleNamespace(record=record))
+        for obs in user.purple.PM_OBS:
+            self.assertNotIn(obs, record)
+
+    def test_terminate_is_not_swallowed_by_that_guard(self):
+        end_ts = int(time.time()) - 86400
+        record = self.make_record(end_ts)
+        with mock.patch.object(self.p, 'backfill_values',
+                               side_effect=Terminate('shutdown')):
+            with self.assertRaises(Terminate):
+                self.p.new_archive_record(types.SimpleNamespace(record=record))
+
+    def test_disabled_proxy_is_not_asked(self):
+        disabled = make_source('Proxy1', is_proxy=True, enable=False, hostname='proxy')
+        self.p.cfg = make_cfg(sources=[disabled],
+                              concentrations=self.p.cfg.concentrations)
+        end_ts = int(time.time()) - 86400
+        record = self.make_record(end_ts)
+        fetch = self.fire(record, self.proxy_records)
+        fetch.assert_not_called()
+
 class TestPurpleInit(unittest.TestCase):
     """Startup wiring: config parsing, xtype registration, poller launch.
     The engine is a mock and both the initial fetch and the poller thread
@@ -783,6 +1151,7 @@ class TestPurpleInit(unittest.TestCase):
 
     def test_startup_with_sources(self):
         engine = mock.Mock()
+        engine.console.archive_interval = 300
         config = {
             'Purple': {
                 'poll_secs': 50,
@@ -825,6 +1194,7 @@ class TestPurpleInit(unittest.TestCase):
 
     def test_startup_without_sources_is_inoperable(self):
         engine = mock.Mock()
+        engine.console.archive_interval = 300
         config = {'Purple': {'Sensor1': {'enable': False, 'hostname': 's'}}}
         n_xtypes = len(weewx.xtypes.xtypes)
         with mock.patch('user.purple.get_concentrations') as gc, \
@@ -838,6 +1208,114 @@ class TestPurpleInit(unittest.TestCase):
         # Defaults were still parsed.
         self.assertEqual(p.cfg.poll_secs, 15)
         self.assertEqual(p.cfg.fresh_secs, 120)
+
+    def test_no_archive_binding_without_a_proxy(self):
+        # A direct sensor keeps no history, so there is nothing to backfill
+        # from: the handler is not bound at all, and a direct-sensor install
+        # sees nothing of this in its log.
+        engine = mock.Mock()
+        engine.console.archive_interval = 300
+        config = {'Purple': {'Sensor1': {'enable': True, 'hostname': 'sensor1'}}}
+        n_xtypes = len(weewx.xtypes.xtypes)
+        orig_accum_maps = list(weewx.accum.accum_dict.maps)
+        try:
+            with mock.patch('user.purple.get_concentrations', return_value=None), \
+                 mock.patch('user.purple.threading.Thread'):
+                p = Purple(engine, config)
+            engine.bind.assert_called_once_with(weewx.NEW_LOOP_PACKET, p.new_loop_packet)
+        finally:
+            del weewx.xtypes.xtypes[0:len(weewx.xtypes.xtypes) - n_xtypes]
+            weewx.accum.accum_dict.maps[:] = orig_accum_maps
+
+    def test_archive_binding_with_a_proxy(self):
+        engine = mock.Mock()
+        # A console that archives every ten minutes, whatever weewx.conf says.
+        engine.console.archive_interval = 600
+        config = {
+            'StdArchive': {'archive_interval': 300},
+            'Purple': {
+                'Proxy1': {'enable': True, 'hostname': 'proxy1'},
+                'Sensor1': {'enable': True, 'hostname': 'sensor1'},
+            },
+        }
+        n_xtypes = len(weewx.xtypes.xtypes)
+        orig_accum_maps = list(weewx.accum.accum_dict.maps)
+        try:
+            with mock.patch('user.purple.get_concentrations', return_value=None), \
+                 mock.patch('user.purple.threading.Thread'):
+                p = Purple(engine, config)
+            engine.bind.assert_has_calls([
+                mock.call(weewx.NEW_LOOP_PACKET, p.new_loop_packet),
+                mock.call(weewx.NEW_ARCHIVE_RECORD, p.new_archive_record)])
+            # The interval comes from the console, not weewx.conf, and the
+            # injection tally is kept for two of them.
+            self.assertEqual(p.archive_interval, 600)
+            self.assertEqual(p.injection_retention_secs, 1200)
+            self.assertEqual(sorted(p.injections), sorted(user.purple.PM_OBS))
+        finally:
+            del weewx.xtypes.xtypes[0:len(weewx.xtypes.xtypes) - n_xtypes]
+            weewx.accum.accum_dict.maps[:] = orig_accum_maps
+
+    def test_archive_interval_under_software_generation_ignores_the_console(self):
+        # WeeWX consults the console only for hardware record generation
+        # (engine.py:544, 566-580); under software generation weewx.conf wins
+        # even when the console reports an interval of its own.
+        engine = mock.Mock()
+        engine.console.archive_interval = 1800
+        config = {
+            'StdArchive': {'record_generation': 'software', 'archive_interval': 300},
+            'Purple': {'Proxy1': {'enable': True, 'hostname': 'proxy1'}},
+        }
+        n_xtypes = len(weewx.xtypes.xtypes)
+        orig_accum_maps = list(weewx.accum.accum_dict.maps)
+        try:
+            with mock.patch('user.purple.get_concentrations', return_value=None), \
+                 mock.patch('user.purple.threading.Thread'):
+                p = Purple(engine, config)
+            self.assertEqual(p.archive_interval, 300)
+        finally:
+            del weewx.xtypes.xtypes[0:len(weewx.xtypes.xtypes) - n_xtypes]
+            weewx.accum.accum_dict.maps[:] = orig_accum_maps
+
+    def test_archive_interval_of_none_falls_back_to_config(self):
+        # A driver that answers None would otherwise stop weewx from starting.
+        engine = mock.Mock()
+        engine.console.archive_interval = None
+        config = {
+            'StdArchive': {'archive_interval': 600},
+            'Purple': {'Proxy1': {'enable': True, 'hostname': 'proxy1'}},
+        }
+        n_xtypes = len(weewx.xtypes.xtypes)
+        orig_accum_maps = list(weewx.accum.accum_dict.maps)
+        try:
+            with mock.patch('user.purple.get_concentrations', return_value=None), \
+                 mock.patch('user.purple.threading.Thread'):
+                p = Purple(engine, config)
+            self.assertEqual(p.archive_interval, 600)
+            self.assertEqual(p.injection_retention_secs, 1200)
+        finally:
+            del weewx.xtypes.xtypes[0:len(weewx.xtypes.xtypes) - n_xtypes]
+            weewx.accum.accum_dict.maps[:] = orig_accum_maps
+
+    def test_archive_interval_falls_back_to_config(self):
+        # A driver that cannot report its interval (engine.py does the same).
+        engine = mock.Mock()
+        type(engine.console).archive_interval = mock.PropertyMock(
+            side_effect=NotImplementedError)
+        config = {
+            'StdArchive': {'archive_interval': 900},
+            'Purple': {'Proxy1': {'enable': True, 'hostname': 'proxy1'}},
+        }
+        n_xtypes = len(weewx.xtypes.xtypes)
+        orig_accum_maps = list(weewx.accum.accum_dict.maps)
+        try:
+            with mock.patch('user.purple.get_concentrations', return_value=None), \
+                 mock.patch('user.purple.threading.Thread'):
+                p = Purple(engine, config)
+            self.assertEqual(p.archive_interval, 900)
+        finally:
+            del weewx.xtypes.xtypes[0:len(weewx.xtypes.xtypes) - n_xtypes]
+            weewx.accum.accum_dict.maps[:] = orig_accum_maps
 
 class TestAccumulatorExtractors(unittest.TestCase):
     """The accumulator must not fold the loop-injected AQI fields into
@@ -1155,7 +1633,9 @@ class TestInstallerConfig(unittest.TestCase):
             source = purple[name]
             self.assertFalse(weeutil.weeutil.to_bool(source['enable']), name)
             self.assertEqual(weeutil.weeutil.to_int(source['port']), 8000, name)
-            self.assertEqual(weeutil.weeutil.to_int(source['timeout']), 5, name)
+            # A proxy answers from its own database on the LAN; if it has not
+            # answered in a second it is down.
+            self.assertEqual(weeutil.weeutil.to_int(source['timeout']), 1, name)
         self.assertEqual(purple['Proxy1']['hostname'], 'proxy1')
         self.assertTrue(weeutil.weeutil.to_bool(purple['Sensor1']['enable']))
         self.assertFalse(weeutil.weeutil.to_bool(purple['Sensor2']['enable']))

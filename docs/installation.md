@@ -22,6 +22,10 @@ description: Requirements and step-by-step installation of the weewx-purple exte
   schema (it contains the `pm1_0`, `pm2_5` and `pm10_0` columns)
 * The `python-dateutil` and `requests` Python packages
 * A PurpleAir sensor reachable on your local network
+* Recommended: a [purple-proxy](https://chaunceygardiner.github.io/purple-proxy/) polling that sensor.  It spares the sensor's easily-overwhelmed processor,
+  serves a two minute average rather than a single reading, and is the only
+  way the air quality data for periods WeeWX was down can be recovered —
+  see [Filling gaps after downtime](configuration.md#filling-gaps-after-downtime).
 
 Not sure about the schema?  wview_extended is the default for new WeeWX 4
 and 5 installs; only databases created under WeeWX 3 and carried forward
@@ -42,6 +46,14 @@ echo '.schema archive' | sqlite3 /var/lib/weewx/weewx.sdb | grep pm2_5
    that is exactly the endpoint this extension polls.  Since the extension
    needs a stable address, give the sensor a DHCP reservation in your
    router (or a hostname in local DNS) so its address doesn't change.
+
+1. Optional but recommended: set up a
+   [purple-proxy](https://chaunceygardiner.github.io/purple-proxy/) to poll the sensor, following its
+   [installation instructions](https://chaunceygardiner.github.io/purple-proxy/installation).  It spares the sensor's processor,
+   serves averages rather than spot readings, and is what lets this
+   extension fill in the air quality data for archive periods WeeWX was not
+   running for.  Set its `archive-interval-secs` to match WeeWX's archive
+   interval.
 
 1. Install the prerequisite Python packages.
 
@@ -90,3 +102,10 @@ command and restart WeeWX.  Note that upgrading replaces the bundled skin
 (`skins/purple/`) — if you customized it, save a copy first.  Overrides
 placed in weewx.conf (report `[[[Labels]]]`/`[[[Texts]]]` entries, an
 `[Accumulator]` section) survive upgrades.
+
+**Upgrading to 7.0 from an earlier release:** if you poll a purple-proxy,
+change `timeout` to 1 in every `[[ProxyN]]` section of weewx.conf.  A proxy
+answers out of its own database on your local network, and the same timeout
+now bounds the gap-filling fetches, which run once per archive record while
+WeeWX starts up.  An upgrade never alters an existing weewx.conf, so an
+existing `timeout = 5` stays until you change it.

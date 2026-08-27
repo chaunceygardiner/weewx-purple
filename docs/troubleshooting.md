@@ -23,6 +23,21 @@ description: Log messages, the manual collector harness, and running the hermeti
   `Fresh concentrations available again.` is logged on recovery.
 * `purpleair reading from <host> not sane, ...`: the reason and the offending
   reading are included in the message.
+* `Backfilled pm1_0, pm2_5, pm10_0 into archive record <time>`: an archive
+  period WeeWX was not running for has had its air quality data filled in
+  from a proxy's archive history.  Expect one line per record after an
+  outage.
+* `No proxy data with which to fill ... in archive record <time>`: no
+  configured proxy could answer for that period, so its pm columns were left
+  empty.  Logged once per archive record, which is also how a proxy that is
+  down makes itself heard for as long as it stays down.
+
+* **The pm columns are empty for a stretch of time.**  WeeWX was not running
+  then, and the periods were filled only if a proxy could answer for them —
+  see [Filling gaps after downtime](configuration.md#filling-gaps-after-downtime).
+  With no `[[ProxyN]]` configured nothing is filled, and the log says
+  nothing about it.  With one configured, look for `Backfilled ...` or `No
+  proxy data with which to fill ...` at the time WeeWX restarted.
 
 ## Watching the collector
 

@@ -19,7 +19,7 @@ packet; AQI and its color computed on demand, never stored.
 
 weewx-purple reads a [PurpleAir](https://www2.purpleair.com/) air quality
 sensor on the local network (or a
-[purple-proxy](https://github.com/chaunceygardiner/purple-proxy) service)
+[purple-proxy](https://chaunceygardiner.github.io/purple-proxy/) service)
 and populates every WeeWX loop packet with:
 
 | Field     | Contents                                                              |
@@ -45,6 +45,17 @@ configured, they are tried in order until one produces a good reading.
 No extra database configuration is needed: WeeWX automatically accumulates
 the loop values into each archive record, so `pm1_0`, `pm2_5` and `pm10_0`
 land in the database (and in history graphs) on their own.
+
+Gaps are filled in, too.  When WeeWX is not running — a restart, a reboot,
+a power cut — the station's logger keeps recording, and WeeWX archives those
+records when it comes back.  They contain no air quality data, because this
+extension was not there to supply any.  If a
+[purple-proxy](https://chaunceygardiner.github.io/purple-proxy/) is
+configured, the missing `pm1_0`, `pm2_5` and `pm10_0` are fetched from the
+proxy's own archive history and filled in, so an outage no longer leaves a
+hole in the pm columns and the graphs that draw them.  The `pm2_5` written is
+the same EPA-corrected value the live path stores.  See
+[What's purple-proxy?](#whats-purple-proxy).
 
 ## The EPA correction
 
@@ -97,11 +108,24 @@ it — see [Translating (i18n)](i18n.md):
 
 ## What's purple-proxy?
 
-[purple-proxy](https://github.com/chaunceygardiner/purple-proxy) is an
-optional service that averages sensor readings over the archive period.  Its
-install is crude and has only been tested on Debian; use of purple-proxy is
-discouraged for all but the most Unix/Linux savvy.  If in doubt, skip it and
-query the PurpleAir sensor directly.
+[purple-proxy](https://chaunceygardiner.github.io/purple-proxy/) is a small service that polls the sensor
+for you and keeps its own archive of the readings.  Running one is recommended, for three reasons:
+
+* **It spares the sensor.**  A PurpleAir's processor is easily overwhelmed,
+  and everything that queries it competes for the same small budget.  The
+  proxy queries the sensor at one steady rate and answers everyone else.
+* **It serves an average, not a spot reading.**  Each value it returns is
+  an average of the last two minutes, and each record it archives is an
+  average of that whole archive period.
+* **It fills the gaps.**  Because the proxy keeps archive records of its
+  own, weewx-purple can go back and fill in the air quality data for the
+  periods WeeWX was down for.  Nothing else can: a sensor queried directly
+  keeps no history, so those records stay empty forever.
+
+Two proxies on different machines can poll the same sensor for redundancy,
+and weewx-purple will try each configured proxy in turn.  The install is a
+script (`sudo ./install`) and has been tested on Debian and Raspberry Pi OS;
+on other platforms it serves as a specification of the steps needed.
 
 ## See it in action
 

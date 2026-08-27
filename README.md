@@ -2,7 +2,7 @@
 
 A WeeWX extension that reads a [PurpleAir](https://www2.purpleair.com/) air
 quality sensor on the local network (or a
-[purple-proxy](https://github.com/chaunceygardiner/purple-proxy) service) and
+[purple-proxy](https://chaunceygardiner.github.io/purple-proxy/) service) and
 inserts particulate concentrations into every WeeWX loop packet.
 
 Copyright (C) 2020-2026 by John A Kline (john@johnkline.com)
@@ -54,6 +54,17 @@ configured, they are tried in order until one produces a good reading.
 No extra database configuration is needed: WeeWX automatically accumulates
 the loop values into each archive record, so `pm1_0`, `pm2_5` and `pm10_0`
 land in the database (and in history graphs) on their own.
+
+Gaps are filled in, too.  When WeeWX is not running — a restart, a reboot,
+a power cut — the station's logger keeps recording, and WeeWX archives those
+records when it comes back.  They contain no air quality data, because this
+extension was not there to supply any.  If a
+[purple-proxy](https://chaunceygardiner.github.io/purple-proxy/) is
+configured, the missing `pm1_0`, `pm2_5` and `pm10_0` are fetched from the
+proxy's own archive history and filled in, so an outage no longer leaves a
+hole in the pm columns and the graphs that draw them.  The `pm2_5` written is
+the same EPA-corrected value the live path stores.  See
+[What's purple-proxy?](#whats-purple-proxy).
 
 ### The EPA correction
 
@@ -123,11 +134,24 @@ test — and translate the values.
 
 ### What's purple-proxy?
 
-[purple-proxy](https://github.com/chaunceygardiner/purple-proxy) is an
-optional service that averages sensor readings over the archive period.  Its
-install is crude and has only been tested on Debian; use of purple-proxy is
-discouraged for all but the most Unix/Linux savvy.  If in doubt, skip it and
-query the PurpleAir sensor directly.
+[purple-proxy](https://chaunceygardiner.github.io/purple-proxy/) is a small service that polls the sensor
+for you and keeps its own archive of the readings.  Running one is recommended, for three reasons:
+
+* **It spares the sensor.**  A PurpleAir's processor is easily overwhelmed,
+  and everything that queries it competes for the same small budget.  The
+  proxy queries the sensor at one steady rate and answers everyone else.
+* **It serves an average, not a spot reading.**  Each value it returns is
+  an average of the last two minutes, and each record it archives is an
+  average of that whole archive period.
+* **It fills the gaps.**  Because the proxy keeps archive records of its
+  own, weewx-purple can go back and fill in the air quality data for the
+  periods WeeWX was down for.  Nothing else can: a sensor queried directly
+  keeps no history, so those records stay empty forever.
+
+Two proxies on different machines can poll the same sensor for redundancy,
+and weewx-purple will try each configured proxy in turn.  The install is a
+script (`sudo ./install`) and has been tested on Debian and Raspberry Pi OS;
+on other platforms it serves as a specification of the steps needed.
 
 See weewx-purple in action:
 * [Weatherboard&trade; Report](https://www.paloaltoweather.com/weatherboard/)
@@ -143,6 +167,14 @@ See weewx-purple in action:
    that is exactly the endpoint this extension polls.  Since the extension
    needs a stable address, give the sensor a DHCP reservation in your
    router (or a hostname in local DNS) so its address doesn't change.
+
+1. Optional but recommended: set up a
+   [purple-proxy](https://chaunceygardiner.github.io/purple-proxy/) to poll the sensor, following its
+   [installation instructions](https://chaunceygardiner.github.io/purple-proxy/installation).  It spares the sensor's processor,
+   serves averages rather than spot readings, and is what lets this
+   extension fill in the air quality data for archive periods WeeWX was not
+   running for.  Set its `archive-interval-secs` to match WeeWX's archive
+   interval.
 
 1. Install the prerequisite Python packages.
 
@@ -202,7 +234,7 @@ See weewx-purple in action:
         enable = false
         hostname = proxy1
         port = 8000
-        timeout = 5
+        timeout = 1
 ```
 
 | Option      | Default              | Meaning                                          |
@@ -211,7 +243,7 @@ See weewx-purple in action:
 | `enable`    | false                | Whether this source is polled                    |
 | `hostname`  |                      | Hostname or IP address of the sensor/proxy       |
 | `port`      | 80 (sensor) / 8000 (proxy) | Port to connect on                         |
-| `timeout`   | 10                   | HTTP timeout (seconds)                           |
+| `timeout`   | 1 (proxy) / 10 (sensor) | HTTP timeout (seconds).  A proxy answers from its own database on the local network, so a second is ample; a sensor's own processor is slow, and the installer writes 15 for one. |
 
 PurpleAir sensors are specified with subsections `[[Sensor1]]`, `[[Sensor2]]`,
 etc.; purple-proxy services with `[[Proxy1]]`, `[[Proxy2]]`, etc.  There is no
@@ -223,6 +255,55 @@ sources are tried.
 
 A reading is considered fresh for `max(120, 3 * poll_secs)` seconds; stale
 readings are never inserted into loop packets.
+
+## Filling gaps after downtime
+
+If at least one `[[ProxyN]]` source is enabled, weewx-purple also fills in
+air quality data for the archive periods WeeWX itself was not running for.
+When WeeWX starts, the station's logger hands over the records it kept while
+WeeWX was down; those records contain no `pm1_0`, `pm2_5` or `pm10_0`,
+because nothing was there to supply them.  For each such record, the proxies
+are asked — in configured order — for the archive records covering that
+period, and the average is written into the record before WeeWX stores it.
+The `pm2_5` written is the same US EPA corrected value the live path stores.
+
+**Set purple-proxy's `archive-interval-secs` to match WeeWX's archive
+interval.**  WeeWX logs the interval it is using at startup (`Using archive
+interval of 300 seconds`), and weewx-purple logs the same number
+(`archive_interval: 300`).  With the two matched, each proxy record lines up
+exactly with one WeeWX period.  A proxy that archives more often is handled —
+its records for the period are averaged — but a proxy that archives *less*
+often than WeeWX has no record to offer for most periods, and those go
+unfilled.
+
+Periods WeeWX did see are never touched: whatever WeeWX averaged from the
+loop packets stands.
+
+A proxy normally has the record for the period that has only just closed: its
+polls are aligned to the clock, so one lands on the archive boundary and the
+record is written a second or two later — before WeeWX archives that period
+at all.  When no proxy has it — a proxy running with a `poll-freq-offset` can
+still be a few seconds behind, and one that was down for the period has
+nothing — the proxy's current reading (an average of the last two minutes)
+stands in, but only while the period is still inside those two minutes.  Any
+period further back that no proxy can answer for is left alone: an empty pm
+column is the honest answer, and better than a value that describes some
+other stretch of time.
+
+With no proxy configured, none of this happens.  A sensor queried directly
+keeps no history, so there is nothing to ask for, and the pm columns for
+those periods stay empty.
+
+Two log messages come from this, one per archive record:
+
+```
+INFO user.purple: Backfilled pm1_0, pm2_5, pm10_0 into archive record 2026-08-26 18:40:00 PDT (1787794800).
+INFO user.purple: No proxy data with which to fill pm1_0, pm2_5, pm10_0 in archive record ...
+```
+
+The second is also how a proxy that is down announces itself, once per
+archive period, for as long as it stays down.
+
 
 # Using weewx-purple fields in reports
 
@@ -364,6 +445,20 @@ xtype:
   `Fresh concentrations available again.` is logged on recovery.
 * `purpleair reading from <host> not sane, ...`: the reason and the offending
   reading are included in the message.
+* `Backfilled pm1_0, pm2_5, pm10_0 into archive record <time>`: an archive
+  period WeeWX was not running for has had its air quality data filled in
+  from a proxy's archive history.  Expect one line per record after an
+  outage.
+* `No proxy data with which to fill ... in archive record <time>`: no
+  configured proxy could answer for that period, so its pm columns were left
+  empty.  Logged once per archive record, which is also how a proxy that is
+  down makes itself heard for as long as it stays down.
+* **The pm columns are empty for a stretch of time.**  WeeWX was not running
+  then, and the periods were filled only if a proxy could answer for them —
+  see [Filling gaps after downtime](#filling-gaps-after-downtime).
+  With no `[[ProxyN]]` configured nothing is filled, and the log says
+  nothing about it.  With one configured, look for `Backfilled ...` or `No
+  proxy data with which to fill ...` at the time WeeWX restarted.
 * To watch what the collector sees, run the module directly against a sensor:
 
   ```

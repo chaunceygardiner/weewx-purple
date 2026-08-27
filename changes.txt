@@ -1,6 +1,38 @@
 weewx-purple change history
 ---------------------------
 
+7.0 08/26/2026
+--------------
+- ACTION REQUIRED for existing installations that poll a purple-proxy:
+  change timeout to 1 in every [[ProxyN]] section of weewx.conf.  A proxy
+  answers out of its own database on the local network, so a second is
+  ample; if it has not answered by then, it is down.  This matters more
+  than it used to: the same timeout now governs the archive backfill
+  below, which runs on WeeWX's main thread once per archive record, and a
+  long catchup would otherwise wait out the timeout for every record.
+  New installs are written with timeout = 1, and a [[ProxyN]] section that
+  specifies no timeout at all now defaults to 1 rather than 10; an upgrade
+  never alters an existing weewx.conf.
+- The startup log now reports the archive interval this extension is
+  working from, alongside poll_secs and fresh_secs.  It is the interval
+  WeeWX itself archives on -- the console's under hardware record
+  generation, weewx.conf's under software -- and it sets the window used
+  for a record that arrives without one.
+- Archive records for periods WeeWX was not running for -- the records a
+  logger hands over at startup catchup -- now have pm1_0, pm2_5 and
+  pm10_0 filled in from a purple-proxy's archive history, so an outage no
+  longer leaves a gap in the pm columns.  The pm2_5 written is the same
+  US EPA corrected value the live path stores.  Only periods this
+  extension contributed no readings to are touched; a period WeeWX did
+  see keeps the average it computed.  For a period that has just closed
+  and that no proxy has archived yet, the proxy's current reading -- an
+  average of the last two minutes -- stands in, but only while the period
+  is still inside those two minutes.
+  For any period further back that no proxy can answer for, the pm fields
+  are left empty rather than filled with a value that says nothing about
+  that period.  This requires a proxy: with only directly-polled sensors
+  configured there is no history to ask for, and nothing changes.
+
 6.0.1 08/24/2026
 ----------------
 - A sensor whose BME280 has failed (or was never fitted) reports no

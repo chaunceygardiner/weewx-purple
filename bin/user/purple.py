@@ -49,7 +49,7 @@ from weewx.engine import StdService
 
 log = logging.getLogger(__name__)
 
-WEEWX_PURPLE_VERSION = "6.0.1"
+WEEWX_PURPLE_VERSION = "7.0"
 
 if sys.version_info[0] < 3 or (sys.version_info[0] == 3 and sys.version_info[1] < 7):
     raise weewx.UnsupportedFeature(
@@ -87,9 +87,15 @@ class Source:
         self.hostname = source_dict.get('hostname', '')
         if is_proxy:
             self.port = to_int(source_dict.get('port', 8000))
+            # A proxy answers out of its own database on the local network,
+            # and this timeout also bounds the archive backfill, which runs on
+            # weewx's main thread once per archive record.  A proxy that has
+            # not answered in a second is down.
+            self.timeout = to_int(source_dict.get('timeout', 1))
         else:
             self.port = to_int(source_dict.get('port', 80))
-        self.timeout  = to_int(source_dict.get('timeout', 10))
+            # A sensor's own processor is slow and easily overwhelmed.
+            self.timeout = to_int(source_dict.get('timeout', 10))
 
 @dataclass
 class Concentrations:
@@ -100,6 +106,15 @@ class Concentrations:
     pm2_5_cf_1_b    : Optional[float]
     current_temp_f  : int
     current_humidity: int
+
+# The observations this extension contributes to loop packets and, when a
+# proxy can answer for the period, to archive records.
+PM_OBS: List[str] = ['pm1_0', 'pm2_5', 'pm10_0']
+
+# What a proxy's /json covers: an average of the last two minutes.  It can
+# stand in for an archive period that closed within that span, and for no
+# other -- see Purple.backfill_values.
+TWO_MINUTE_AVERAGE_SECS: int = 120
 
 @dataclass
 class Configuration:
@@ -123,6 +138,29 @@ def reraise_if_terminate(e: BaseException) -> None:
     recognized by name."""
     if type(e).__name__ == 'Terminate':
         raise e
+
+def compute_pm_values(concentrations: Concentrations) -> Dict[str, float]:
+    """The pm values this extension contributes for a set of concentrations.
+    Both the loop path and the archive backfill go through here, so the stored
+    pm2_5 is the same US EPA corrected value either way (never pm2_5_atm).  An
+    observation is absent from the returned dict when its inputs are missing."""
+    values: Dict[str, float] = {}
+    if concentrations.pm1_0 is not None:
+        values['pm1_0'] = concentrations.pm1_0
+    if concentrations.pm2_5_cf_1_b is not None:
+        b_reading = concentrations.pm2_5_cf_1_b
+    else:
+        b_reading = concentrations.pm2_5_cf_1 # Dup A sensor reading
+    if (concentrations.pm2_5_cf_1 is not None
+            and b_reading is not None
+            and concentrations.current_humidity is not None
+            and concentrations.current_temp_f is not None):
+        values['pm2_5'] = AQI.compute_pm2_5_us_epa_correction(
+                concentrations.pm2_5_cf_1, b_reading,
+                concentrations.current_humidity, concentrations.current_temp_f)
+    if concentrations.pm10_0 is not None:
+        values['pm10_0'] = concentrations.pm10_0
+    return values
 
 def get_concentrations(cfg: Configuration):
     for source in cfg.sources:
@@ -315,6 +353,97 @@ def populate_record(ts, j):
 
     return record
 
+def concentrations_from_archive_record(record: Dict[str, Any]) -> Concentrations:
+    """Concentrations for one purple-proxy ARCHIVE record (as returned by
+    populate_record).  The same A/B treatment get_concentrations applies to a
+    live reading: pm1_0 and pm10_0 are the atm values, averaged across the two
+    sensors when a b channel is present, and pm2_5 is left as the raw cf_1
+    pair for compute_pm_values to correct.  Kept separate from
+    get_concentrations, which fetches and freshness-checks a LIVE reading;
+    change one and look at the other."""
+    concentrations = Concentrations(
+        timestamp        = to_int(record['dateTime']),
+        pm1_0            = to_float(record['pm1_0_atm']),
+        pm10_0           = to_float(record['pm10_0_atm']),
+        pm2_5_cf_1       = to_float(record['pm2_5_cf_1']),
+        pm2_5_cf_1_b     = None, # If there is a second sensor, this will be updated below.
+        current_temp_f   = to_int(record['current_temp_f']),
+        current_humidity = to_int(record['current_humidity']),
+    )
+    # Each b channel is taken only if that field is actually there.  is_sane
+    # gates its b-channel checks on 'pm2.5_aqi_b', so a record can carry one _b
+    # field and not another and still be judged sane; this runs on the main
+    # thread, where a KeyError would stop weewxd.
+    if 'pm1_0_atm_b' in record:
+        concentrations.pm1_0        = (concentrations.pm1_0  + to_float(record['pm1_0_atm_b'])) / 2.0
+    if 'pm2_5_cf_1_b' in record:
+        concentrations.pm2_5_cf_1_b = to_float(record['pm2_5_cf_1_b'])
+    if 'pm10_0_atm_b' in record:
+        concentrations.pm10_0       = (concentrations.pm10_0 + to_float(record['pm10_0_atm_b'])) / 2.0
+    return concentrations
+
+def fetch_proxy_archive_records(source: Source, since_ts: int, max_ts: int) -> Optional[List[Dict[str, Any]]]:
+    """Ask a purple-proxy for the archive records it holds for (since_ts,
+    max_ts].  purple-proxy's since_ts is exclusive and its max_ts inclusive,
+    which is exactly a WeeWX archive period.
+
+    Honors the source's configured timeout, which for a proxy is short by
+    design (see install.py): the proxy answers this out of its own sqlite
+    database in milliseconds, and this runs on the main thread once per
+    archive record.
+
+    Returns None if the proxy could not be asked, otherwise the sane records
+    it returned -- possibly an empty list.  A proxy writes a period's record
+    on its first poll at or past the boundary, and its polls are clock
+    aligned (`service.py:285-290`), so it normally has the record a second or
+    two after the boundary -- ahead of WeeWX, which archives the period at
+    archive_delay.  An empty answer for the period that just closed means a
+    proxy running with a poll-freq-offset, or one that was down."""
+    url = 'http://%s:%s/fetch-archive-records?since_ts=%d,max_ts=%d' % (
+        source.hostname, source.port, since_ts, max_ts)
+    try:
+        log.debug('fetch_proxy_archive_records: fetching from url: %s, timeout: %d' % (url, source.timeout))
+        r = requests.get(url=url, timeout=source.timeout)
+        r.raise_for_status()
+        j = r.json()
+        if not isinstance(j, list):
+            log.info('fetch_proxy_archive_records: %s returned %r, expected a list of records.' % (
+                source.hostname, j))
+            return None
+        # Parsing stays inside the try: this runs on the main thread, where
+        # anything that escapes takes weewxd down with it.  A [[ProxyN]] port
+        # pointed at some other service can return well-formed json that is
+        # nothing like a list of readings.
+        records: List[Dict[str, Any]] = []
+        for reading in j:
+            if not isinstance(reading, dict):
+                log.info('fetch_proxy_archive_records: %s returned %r, expected a reading.' % (
+                    source.hostname, reading))
+                return None
+            sane, reason = is_sane(reading)
+            if not sane:
+                log.warning('purpleair archive record from %s not sane, %s: %s' % (source.hostname, reason, reading))
+                continue
+            records.append(populate_record(datetime_from_reading(reading['DateTime']).timestamp(), reading))
+    except Exception as e:
+        reraise_if_terminate(e)
+        log.info('fetch_proxy_archive_records: Attempt to fetch from: %s failed: %s.' % (source.hostname, e))
+        return None
+    return records
+
+def average_pm_values(records: List[Dict[str, Any]]) -> Dict[str, float]:
+    """Average the pm values of the proxy archive records covering one WeeWX
+    archive period.  Each record is corrected before it is averaged, so the
+    result is the average of corrected values -- what the accumulator would
+    have arrived at from loop packets."""
+    sums  : Dict[str, float] = {}
+    counts: Dict[str, int]   = {}
+    for record in records:
+        for obs, value in compute_pm_values(concentrations_from_archive_record(record)).items():
+            sums[obs]   = sums.get(obs, 0.0) + value
+            counts[obs] = counts.get(obs, 0) + 1
+    return {obs: sums[obs] / counts[obs] for obs in sums}
+
 class Purple(StdService):
     """Collect Purple Air air quality measurements."""
 
@@ -325,6 +454,40 @@ class Purple(StdService):
         self.engine = engine
         self.config_dict = config_dict.get('Purple', {})
         self.stale_logged = False
+
+        # Archive periods this extension put pm data into, per observation.
+        # An archive record carries no proof of its own: under hardware record
+        # generation the accumulator's values are grafted on AFTER this
+        # service's handler runs, so a missing pm field says nothing about
+        # whether the accumulator is empty.  What this extension injected does
+        # say so, and only this extension knows it.  Main thread only.
+        # The interval WeeWX actually archives on, decided the way the engine
+        # decides it (engine.py:544, 566-580): under SOFTWARE record generation
+        # weewx.conf's value is used and the console is ignored; under HARDWARE
+        # the console's is used -- differing from weewx.conf only earns a log
+        # message -- unless the driver cannot report one.
+        archive_dict = config_dict.get('StdArchive', {})
+        configured_interval = to_int(archive_dict.get('archive_interval', 300))
+        if archive_dict.get('record_generation', 'hardware').lower() == 'hardware':
+            try:
+                self.archive_interval = to_int(engine.console.archive_interval)
+            except (AttributeError, NotImplementedError):
+                self.archive_interval = configured_interval
+            # A driver that answers None would otherwise stop weewx from
+            # starting, with a traceback pointing at this extension.
+            if not self.archive_interval:
+                self.archive_interval = configured_interval
+        else:
+            self.archive_interval = configured_interval
+        self.injections: Dict[str, List[float]] = {obs: [] for obs in PM_OBS}
+        # Two archive intervals is plenty to answer for the period that just
+        # closed, and bounds the list.
+        self.injection_retention_secs = 2 * self.archive_interval
+        # A proxy that could not be reached is not asked again until this
+        # time.  A startup catchup delivers its records back to back: without
+        # this, an unreachable proxy would cost its whole timeout PER RECORD.
+        # If it is down, it is down.
+        self.proxy_retry_after: Dict[str, float] = {}
 
         poll_secs  = to_int(self.config_dict.get('poll_secs', 15))
         fresh_secs = max(120, 3 * poll_secs)
@@ -338,6 +501,7 @@ class Purple(StdService):
 
         log.info('poll_secs : %d' % self.cfg.poll_secs)
         log.info('fresh_secs: %d' % self.cfg.fresh_secs)
+        log.info('archive_interval: %d' % self.archive_interval)
         source_count = 0
         for source in self.cfg.sources:
             if source.enable:
@@ -362,6 +526,14 @@ class Purple(StdService):
 
             self.bind(weewx.NEW_LOOP_PACKET, self.new_loop_packet)
 
+            # Backfilling an archive period this extension contributed nothing
+            # to means asking a proxy for its archive history.  A direct sensor
+            # keeps no history, so with no proxy configured there is nothing to
+            # ask and the handler is not bound at all -- no fetches, no log
+            # messages, nothing.
+            if any(source.enable and source.is_proxy for source in self.cfg.sources):
+                self.bind(weewx.NEW_ARCHIVE_RECORD, self.new_archive_record)
+
     def new_loop_packet(self, event):
         log.debug('new_loop_packet(%s)' % event)
         with self.cfg.lock:
@@ -374,24 +546,17 @@ class Purple(StdService):
                     self.stale_logged = False
                 log.debug('Time of reading being inserted: %s' % timestamp_to_string(self.cfg.concentrations.timestamp))
                 # Insert pm1_0, pm2_5, pm10_0, aqi and aqic into loop packet.
-                if self.cfg.concentrations.pm1_0 is not None:
-                    event.packet['pm1_0'] = self.cfg.concentrations.pm1_0
+                values = compute_pm_values(self.cfg.concentrations)
+                if 'pm1_0' in values:
+                    event.packet['pm1_0'] = values['pm1_0']
                     log.debug('Inserted packet[pm1_0]: %f into packet.' % event.packet['pm1_0'])
-                if self.cfg.concentrations.pm2_5_cf_1_b is not None:
-                    b_reading = self.cfg.concentrations.pm2_5_cf_1_b
-                else:
-                    b_reading = self.cfg.concentrations.pm2_5_cf_1 # Dup A sensor reading
-                if (self.cfg.concentrations.pm2_5_cf_1 is not None
-                        and b_reading is not None
-                        and self.cfg.concentrations.current_humidity is not None
-                        and self.cfg.concentrations.current_temp_f is not None):
-                    event.packet['pm2_5'] = AQI.compute_pm2_5_us_epa_correction(
-                            self.cfg.concentrations.pm2_5_cf_1, b_reading,
-                            self.cfg.concentrations.current_humidity, self.cfg.concentrations.current_temp_f)
+                if 'pm2_5' in values:
+                    event.packet['pm2_5'] = values['pm2_5']
                     log.debug('Inserted packet[pm2_5]: %f into packet.' % event.packet['pm2_5'])
-                if self.cfg.concentrations.pm10_0 is not None:
-                    event.packet['pm10_0'] = self.cfg.concentrations.pm10_0
+                if 'pm10_0' in values:
+                    event.packet['pm10_0'] = values['pm10_0']
                     log.debug('Inserted packet[pm10_0]: %f into packet.' % event.packet['pm10_0'])
+                self.record_injections(event.packet, values)
                 if 'pm2_5' in event.packet:
                     event.packet['pm2_5_aqi'] = AQI.compute_pm2_5_aqi(event.packet['pm2_5'])
                 if 'pm2_5_aqi' in event.packet:
@@ -403,6 +568,113 @@ class Purple(StdService):
                     self.stale_logged = True
                 else:
                     log.debug('Found no fresh concentrations to insert.')
+
+    def record_injections(self, packet: Dict[str, Any], values: Dict[str, float]) -> None:
+        """Remember, per observation, that this extension put a value in a loop
+        packet -- this is what new_archive_record consults to tell a period the
+        accumulator has data for from one it has nothing for.  Main thread
+        only, so no lock is taken."""
+        ts = to_float(packet.get('dateTime', time.time()))
+        for obs in values:
+            self.injections[obs].append(ts)
+        cutoff = ts - self.injection_retention_secs
+        for obs in self.injections:
+            self.injections[obs] = [t for t in self.injections[obs] if t >= cutoff]
+
+    def injected_in(self, obs: str, start_ts: float, end_ts: float) -> bool:
+        """Did this extension put obs into a loop packet in (start_ts, end_ts]?
+        If it did, the accumulator holds that period's samples and nothing
+        needs backfilling."""
+        return any(start_ts < ts <= end_ts for ts in self.injections[obs])
+
+    def new_archive_record(self, event):
+        """Fill in pm observations for an archive period this extension
+        contributed nothing to -- the periods WeeWX was down for, handed over
+        by the logger at startup catchup.  Bound only when a proxy source is
+        configured.
+
+        Runs on the main thread, in the data_services slot, so the record can
+        still be altered: StdArchive stores it (and, for hardware records,
+        grafts the accumulator's values onto the fields still missing) only
+        after every data service has seen it.  Whatever is set here therefore
+        survives -- which is also why a value is only ever set for a period
+        this extension injected nothing into."""
+        record = event.record
+        end_ts = to_int(record['dateTime'])
+        # The record's own interval, not the configured archive interval: on a
+        # long catchup a logger's records need not fall on archive boundaries.
+        interval_secs = to_int(record.get('interval', 0)) * 60
+        if interval_secs <= 0:
+            interval_secs = self.archive_interval
+        start_ts = end_ts - interval_secs
+
+        # Test for None, not just for absence.  Under software record
+        # generation the accumulator has already had its say by the time this
+        # runs, and it writes None for a type it holds with no usable values.
+        needed = [obs for obs in PM_OBS if record.get(obs) is None
+                  and not self.injected_in(obs, start_ts, end_ts)]
+        if not needed:
+            return
+
+        # Main thread: an exception escaping here goes up through
+        # dispatchEvent and stops weewxd.  Nothing about filling in an old
+        # record is worth that.
+        try:
+            values = self.backfill_values(start_ts, end_ts)
+        except Exception as e:
+            reraise_if_terminate(e)
+            log.error('Could not fill %s in archive record %s: %s' % (
+                ', '.join(needed), timestamp_to_string(end_ts), e))
+            return
+        filled = [obs for obs in needed if obs in values]
+        for obs in filled:
+            record[obs] = values[obs]
+        if filled:
+            log.info('Backfilled %s into archive record %s.' % (
+                ', '.join(filled), timestamp_to_string(end_ts)))
+        else:
+            log.info('No proxy data with which to fill %s in archive record %s.' % (
+                ', '.join(needed), timestamp_to_string(end_ts)))
+
+    def backfill_values(self, start_ts: int, end_ts: int) -> Dict[str, float]:
+        """The pm values for the period (start_ts, end_ts], from the first
+        enabled proxy that holds archive records covering it.
+
+        A proxy normally holds the period that just closed -- its polls are
+        clock aligned, so one lands on the boundary and the record is written
+        a second or two later, ahead of WeeWX's own archiving.  When none of
+        them has it, fall back to the reading already in hand, but only when
+        the period closed within the last two minutes -- the span a proxy's
+        /json average describes.  That reading is usually a proxy's two minute
+        average; when the proxies are failing it can be a sensor's single
+        instantaneous sample, which is accepted for the same reason a partial
+        period is: one loop packet's worth of data is what WeeWX would have
+        stored for that period anyway.  Any period further back is a period this reading
+        says nothing about: if no proxy holds an archive record for it, its pm
+        columns stay empty.  That is the right answer, not a defeat."""
+        now = time.time()
+        for source in self.cfg.sources:
+            if not source.enable or not source.is_proxy:
+                continue
+            key = '%s:%s' % (source.hostname, source.port)
+            if now < self.proxy_retry_after.get(key, 0.0):
+                continue
+            records = fetch_proxy_archive_records(source, start_ts, end_ts)
+            if records is None:
+                # Unreachable.  Leave it alone until the next archive period:
+                # every record in a catchup burst would otherwise wait out the
+                # same timeout.
+                self.proxy_retry_after[key] = now + self.archive_interval
+                continue
+            if records:
+                return average_pm_values(records)
+        if time.time() - end_ts < TWO_MINUTE_AVERAGE_SECS:
+            with self.cfg.lock:
+                concentrations = self.cfg.concentrations
+                if concentrations is not None and concentrations.timestamp is not None \
+                        and concentrations.timestamp + self.cfg.fresh_secs >= time.time():
+                    return compute_pm_values(concentrations)
+        return {}
 
     @staticmethod
     def configure_sources(config_dict):
@@ -588,7 +860,9 @@ class AQI(weewx.xtypes.XType):
         if record['pm2_5'] is None:
             # Returning CannotCalculate causes exception in ImageGenerator, return UnknownType instead.
             # ERROR weewx.reportengine: Caught unrecoverable exception in generator 'weewx.imagegenerator.ImageGenerator'
-            # This will happen for any catchup records inserted at weewx startup.
+            # A record can reach here with no pm2_5: a period no proxy could
+            # answer for, or any catchup record at all on a station with no
+            # proxy configured.
             log.debug('get_scalar called where record[pm2_5] is None.')
             raise weewx.UnknownType(obs_type)
         try:
