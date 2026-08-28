@@ -1,8 +1,39 @@
 weewx-purple change history
 ---------------------------
 
-7.0.1 (in development)
-----------------------
+7.1 08/28/2026
+--------------------
+- ACTION REQUIRED for installations running WeeWX earlier than 4.6:
+  weewx-purple now requires WeeWX 4.6 or later and will refuse to
+  install or start on anything older.  The demo report's template uses
+  $gettext and $lang, which arrived in WeeWX 4.6.0 (02/04/2022); on an
+  earlier WeeWX the page did not fall back to English, it rendered the
+  placeholders literally ($gettext("Day") in place of the tab labels,
+  and a lang="$lang" attribute).  The version check compares the parts
+  as integers, so the 4.10 series -- which sorts below "4.6" as text --
+  is correctly accepted.
+- A report set back to lang = en under a non-English [StdReport]
+  [[Defaults]] lang now gets the US month/day year-plot axis back.  Each
+  lang file overrides the year plot's x_label_format, but lang/en.conf
+  set nothing, and a lang file is merged per report -- so an English
+  report under [[Defaults]] lang = de rendered an English page with a
+  German day-month axis.  en.conf now restates the default, and a test
+  requires every lang file to set it.
+- The skin no longer shadows its own translations.  skin.conf carried
+  its own copy of the two observation labels and of the year plot's
+  x_label_format, and WeeWX merges skin.conf back over the lang file, so
+  those copies overrode the language -- but only for a report whose lang
+  was set in skin.conf itself, where a German page kept English plot
+  titles and a US month/day date axis.  Setting the language the
+  documented way, in weewx.conf, was never affected.  Both values now
+  live only in lang/<lang>.conf, and a test fails if either comes back.
+  The lang files' [Units] [[Labels]] entries are gone too -- purple.py
+  registers those two unit labels in WeeWX's process-global dictionary,
+  which is consulted first, so a lang file could never have translated
+  them and the entries were a trap for translators.  Set the language in
+  weewx.conf ([StdReport] [[PurpleReport]] lang = de, or [[Defaults]]):
+  weewx.conf is merged after skin.conf, and a stock WeeWX 5 weewx.conf
+  carries [[Defaults]] lang = en, which overrides a lang set in skin.conf.
 - An archive record whose interval is NULL no longer stops WeeWX.  The
   archive backfill added in 7.0 reads the record's own interval to work
   out the period it covers; a record that carries no value at all for it

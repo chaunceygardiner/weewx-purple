@@ -1631,18 +1631,36 @@ class TestInstallerConfig(unittest.TestCase):
     REPO_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
     @classmethod
-    def installer_config(cls):
-        """install.py's config stanza, whichever form it is written in.
-        Loading it needs weecfg.extension imported first: that module aliases
-        itself as 'setup' in sys.modules for installers written against the
-        pre-5.0 name, which is what install.py's own import resolves
-        through."""
+    def install_module(cls):
+        """install.py, loaded as a module.  Loading it needs
+        weecfg.extension imported first: that module aliases itself as
+        'setup' in sys.modules for installers written against the pre-5.0
+        name, which is what install.py's own import resolves through."""
         importlib.import_module('weecfg.extension')  # registers the alias
         spec = importlib.util.spec_from_file_location(
             'purple_install', os.path.join(cls.REPO_DIR, 'install.py'))
         module = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(module)
-        return module.PurpleInstaller()['config']
+        return module
+
+    @classmethod
+    def installer_config(cls):
+        """install.py's config stanza, whichever form it is written in."""
+        return cls.install_module().PurpleInstaller()['config']
+
+    def test_version_is_in_lockstep(self):
+        """The version lives in three places and they must agree:
+        install.py's version=, WEEWX_PURPLE_VERSION in purple.py, and
+        [Extras] version in skins/purple/skin.conf.  A release that bumps
+        two of the three ships a skin reporting the wrong version, which
+        nothing else would catch."""
+        installer_version = self.install_module().PurpleInstaller()['version']
+        skin = configobj.ConfigObj(
+            os.path.join(self.REPO_DIR, 'skins', 'purple', 'skin.conf'),
+            encoding='utf-8', file_error=True)
+        self.assertEqual(installer_version, user.purple.WEEWX_PURPLE_VERSION)
+        self.assertEqual(skin['Extras']['version'],
+                         user.purple.WEEWX_PURPLE_VERSION)
 
     def test_html_root_is_a_bare_subdirectory(self):
         """HTML_ROOT must NOT carry a public_html prefix.  weecfg prepends the
@@ -1689,8 +1707,14 @@ class TestI18n(unittest.TestCase):
     """The demo skin's translation plumbing -- the same machinery
     weewx-skyfield/celestial/loopdata ship: [Texts] is gettext-style (the
     English string IS the key; a report falls back to it one string at a
-    time), observation labels ride [Labels] [[Generic]] and unit labels
-    [Units] [[Labels]], all merged from lang/<lang>.conf over skin.conf."""
+    time) and observation labels ride [Labels] [[Generic]].
+
+    Merge order matters and is the reverse of what one expects: WeeWX
+    merges lang/<lang>.conf FIRST and then merges skin.conf over it, so
+    anything skin.conf repeats shadows the translation.  A lang set in
+    weewx.conf ([[Defaults]] or the report section) is merged after
+    skin.conf and does win.  Hence the tests below, which keep every
+    translatable value out of skin.conf and in the lang files."""
 
     REPO_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     SKIN_DIR = os.path.join(REPO_DIR, 'skins', 'purple')
@@ -1729,8 +1753,8 @@ class TestI18n(unittest.TestCase):
     def test_en_conf_ships_exactly_what_renders(self):
         """Both directions: a rendered key missing from lang/en.conf fails,
         and an en.conf key nothing renders fails -- the English file is the
-        reference dictionary for translators.  Its [Labels] must mirror
-        skin.conf's fallbacks and its [Units] labels purple.py's defaults."""
+        reference dictionary for translators, and English is the identity
+        translation."""
         conf = self.lang_conf('en.conf')
         shipped = dict(conf['Texts'])
         rendered = self.rendered_keys()
@@ -1740,17 +1764,111 @@ class TestI18n(unittest.TestCase):
                          'in en.conf but never rendered')
         # English is the identity translation: every value equals its key.
         self.assertEqual([k for k, v in shipped.items() if v != k], [])
+
+    @classmethod
+    def lang_paths(cls):
+        """Every (section-path, key) a shipped lang file sets, e.g.
+        (('Labels', 'Generic'), 'pm2_5')."""
+        found = set()
+
+        def walk(section, path):
+            for key in section.scalars:
+                found.add((path, key))
+            for name in section.sections:
+                walk(section[name], path + (name,))
+
+        for lang in cls.LANGUAGES:
+            walk(cls.lang_conf(lang + '.conf'), ())
+        return found
+
+    def test_skin_conf_repeats_nothing_a_lang_file_sets(self):
+        """skin.conf must not set anything any lang file sets.  WeeWX merges
+        skin.conf back OVER the lang file when `lang` is set in skin.conf, so
+        a repeated value shadows its translation -- a German page with
+        English plot titles.  The forbidden set is DERIVED from the lang
+        files rather than hardcoded, so a translator who starts localizing a
+        new key (say [[month_images]] x_label_format) is told that skin.conf
+        must give it up, instead of having the translation silently die."""
         skin = configobj.ConfigObj(os.path.join(self.SKIN_DIR, 'skin.conf'),
                                    encoding='utf-8', file_error=True)
-        self.assertEqual(dict(conf['Labels']['Generic']),
-                         dict(skin['Labels']['Generic']))
-        for unit, label in dict(conf['Units']['Labels']).items():
-            self.assertEqual(label, weewx.units.default_unit_label_dict[unit])
+        clashes = []
+        for path, key in sorted(self.lang_paths()):
+            section = skin
+            for name in path:
+                if name not in section:
+                    break
+                section = section[name]
+            else:
+                if key in section:
+                    clashes.append('/'.join(path + (key,)))
+        self.assertEqual(clashes, [],
+                         'skin.conf repeats values the lang files set')
+        # And en.conf still supplies what skin.conf no longer does.
+        en = self.lang_conf('en.conf')
+        self.assertEqual(sorted(en['Labels']['Generic']),
+                         ['pm2_5', 'pm2_5_aqi'])
+
+    def test_skin_conf_sets_lang(self):
+        """skin.conf must keep `lang = en`.  It is load-bearing now that
+        skin.conf carries no labels of its own: on an install whose
+        weewx.conf sets no lang, this line is the only thing that merges
+        en.conf, and without it the AQI heading and both plot titles render
+        as the raw observation names pm2_5_aqi / pm2_5."""
+        skin = configobj.ConfigObj(os.path.join(self.SKIN_DIR, 'skin.conf'),
+                                   encoding='utf-8', file_error=True)
+        self.assertEqual(skin.get('lang'), 'en')
+
+    def test_lang_files_carry_no_dead_unit_labels(self):
+        """No lang file may carry [Units] [[Labels]] for aqi or aqi_color.
+        purple.py registers those two in weewx.units.default_unit_label_dict
+        at import, and Formatter.get_label_string consults that
+        process-global dict BEFORE the one merged from the skin and lang
+        files -- so an entry for them can never take effect.  Shipping one
+        is a trap for a translator: it reads as translatable, and
+        translating it does nothing.
+
+        Other units are NOT banned: microgram_per_meter_cubed, which labels
+        the pm2_5 plots' y axis, is not in that dict and IS reachable from a
+        lang file.  Nor are [Units] [[StringFormats]]/[[TimeFormats]], which
+        Formatter.fromSkinDict honors and WeeWX's own Seasons lang files
+        localize."""
+        for lang in self.LANGUAGES:
+            labels = self.lang_conf(lang + '.conf').get('Units', {}).get(
+                'Labels', {})
+            for dead in ('aqi', 'aqi_color'):
+                self.assertNotIn(dead, labels, lang)
+        for unit, label in (('aqi', ' AQI'), ('aqi_color', ' RGB')):
+            self.assertEqual(weewx.units.default_unit_label_dict[unit], label)
+
+    def test_every_lang_file_sets_the_year_axis_format(self):
+        """Every lang file -- en.conf included -- must set
+        [ImageGenerator] [[year_images]] x_label_format.  A lang file is
+        merged per report, so one that stays silent cannot undo another's
+        setting: with [[Defaults]] lang = de and [[PurpleReport]] lang = en,
+        an en.conf without this leaves the English page carrying de.conf's
+        day-month axis."""
+        for lang in self.LANGUAGES:
+            conf = self.lang_conf(lang + '.conf')
+            self.assertIn('ImageGenerator', conf, lang)
+            self.assertIn('year_images', conf['ImageGenerator'], lang)
+            self.assertIn('x_label_format',
+                          conf['ImageGenerator']['year_images'], lang)
+            fmt = conf['ImageGenerator']['year_images']['x_label_format']
+            # Must be a string: an unquoted value containing a comma parses
+            # as a list, which passes a truthiness check and then raises
+            # TypeError inside time.strftime when the plot is drawn.
+            self.assertIsInstance(fmt, str, lang)
+            self.assertTrue(fmt, lang)
+            if lang == 'en':
+                # en.conf carries the US order; skin.conf carries none, so
+                # this file is the only place the English format lives.
+                self.assertEqual(fmt, '%m/%d')
 
     def test_lang_files_consistent(self):
         """Every shipped lang file must parse, translate exactly en.conf's
         keys (a stale key would silently never render; a missing one ships
-        an untranslated string), and carry the same [Labels]/[Units] keys."""
+        an untranslated string), and carry the same [Labels] and [ImageGenerator] keys en.conf
+        does."""
         en = self.lang_conf('en.conf')
         for lang in self.LANGUAGES:
             conf = self.lang_conf(lang + '.conf')
@@ -1760,8 +1878,15 @@ class TestI18n(unittest.TestCase):
                 self.assertTrue(val, (lang, key))
             self.assertEqual(set(conf['Labels']['Generic']),
                              set(en['Labels']['Generic']), lang)
-            self.assertEqual(set(conf['Units']['Labels']),
-                             set(en['Units']['Labels']), lang)
+            self.assertIn('ImageGenerator', conf, lang)
+            self.assertIn('year_images', conf['ImageGenerator'], lang)
+            # Scalars only, and only for year_images.  A lang file may add
+            # plot subsections of its own -- [[day_images]] [[[dayaqi]]]
+            # [[[[pm2_5_aqi]]]] y_label, say, to localize an axis label --
+            # on any plot group, and en.conf need not have them.
+            self.assertEqual(set(conf['ImageGenerator']['year_images'].scalars),
+                             set(en['ImageGenerator']['year_images'].scalars),
+                             lang)
 
     def test_matches_weewx_seasons_vocabulary(self):
         """The plot-period tabs are copied from WeeWX's own Seasons lang
@@ -1783,6 +1908,50 @@ class TestI18n(unittest.TestCase):
             for key in shared:
                 self.assertEqual(conf['Texts'][key], seasons['Texts'][key],
                                  (lang, key))
+
+
+class TestWeewxVersionFloor(unittest.TestCase):
+    """The 4.6 floor: the demo skin's $gettext/$lang arrived in WeeWX 4.6.0."""
+
+    def check(self, version: str) -> bool:
+        with mock.patch.object(weewx, '__version__', version):
+            return user.purple.weewx_version_at_least((4, 6))
+
+    def test_rejects_below_4_6(self):
+        for version in ['3.9.2', '4', '4.0.0', '4.1.1', '4.5.1', '4.5.1a1']:
+            self.assertFalse(self.check(version), version)
+
+    def test_accepts_4_6_and_later(self):
+        for version in ['4.6', '4.6.0', '4.6.2', '4.9.1', '5', '5.0.0',
+                        '5.1.0b1', '5.5.0']:
+            self.assertTrue(self.check(version), version)
+
+    def test_prerelease_suffixes_in_the_compared_components(self):
+        """The non-digit stripper only matters when the suffix lands in a
+        component that is actually compared -- '4.5.1a1' slices to ['4','5']
+        and never reaches it.  These do reach it.  A 4.6 beta counts as 4.6:
+        it carries the $gettext support this floor is about."""
+        for version in ['4.6b1', '4.6rc1', '4.10rc1', '5.0b2']:
+            self.assertTrue(self.check(version), version)
+        for version in ['4.5b1', '4.0rc1', '3.9b1']:
+            self.assertFalse(self.check(version), version)
+
+    def test_accepts_the_4_10_series(self):
+        """The regression a plain string compare would reintroduce: as text,
+        '4.10.0' sorts BELOW '4.6', so the last WeeWX 4 series would be
+        refused."""
+        self.assertTrue('4.10.0' < '4.6')          # the trap itself
+        for version in ['4.10.0', '4.10.1', '4.10.2']:
+            self.assertTrue(self.check(version), version)
+
+    def test_installer_check_agrees(self):
+        """install.py carries its own copy (it cannot import the extension);
+        the two must not drift."""
+        installer = TestInstallerConfig.install_module()
+        for version in ['3.9.2', '4.0.0', '4.5.1', '4.6', '4.10.2', '5.5.0']:
+            with mock.patch.object(weewx, '__version__', version):
+                self.assertEqual(installer.weewx_version_at_least((4, 6)),
+                                 self.check(version), version)
 
 
 if __name__ == '__main__':

@@ -1,22 +1,45 @@
-# weewx-purple
-
-A WeeWX extension that reads a [PurpleAir](https://www2.purpleair.com/) air
-quality sensor on the local network (or a
-[purple-proxy](https://chaunceygardiner.github.io/purple-proxy/) service) and
-inserts particulate concentrations into every WeeWX loop packet.
+# weewx-purple — Know what you're breathing
+Open source plugin for WeeWX software.
 
 Copyright (C) 2020-2026 by John A Kline (john@johnkline.com)
 
-[User manual](https://chaunceygardiner.github.io/weewx-purple/) ·
-[GitHub project](https://github.com/chaunceygardiner/weewx-purple)
+[![Read the manual](assets/btn-manual.svg)](https://chaunceygardiner.github.io/weewx-purple/)
+[![Download weewx-purple.zip](assets/btn-download.svg)](https://github.com/chaunceygardiner/weewx-purple/releases/latest/download/weewx-purple.zip)
+[![Report an issue](assets/btn-issue.svg)](https://github.com/chaunceygardiner/weewx-purple/issues)
+
+## What it is
+
+weewx-purple puts the air over your own station on your WeeWX site: how much
+smoke and dust is in it **right now**, and what the EPA would call it.
+
+PM1.0, PM2.5 and PM10 land in every loop packet and every archive record, so
+air quality graphs sit alongside temperature and rain, and the current AQI —
+with its official EPA color — is available anywhere in your reports and
+templates.  The PM2.5 that gets stored is EPA-corrected, not the raw laser
+count, so the number on your page is the number the agencies would publish.
+When the smoke rolls in, you are reading your own backyard, not a regional
+monitor miles upwind.
+
+**Downtime leaves no hole.**  A restart, a reboot, a power cut: weewx-purple
+goes back and fills the pm data into the records WeeWX missed (this needs the
+author's [purple-proxy](https://chaunceygardiner.github.io/purple-proxy/)), so
+nothing is left blank in the columns or in the graphs that draw them.  The
+catch-up records your logger hands over when WeeWX returns carry no air
+quality data of their own — nothing was running to supply any.  See
+[Filling gaps after downtime](#filling-gaps-after-downtime).
+
+![The demo page](PurpleReport.jpg)
 
 **Requires:**
-* WeeWX 4 or 5
+* WeeWX 4.6 or later
 * Python 3.7 or greater
 * The [wview_extended](https://github.com/weewx/weewx/blob/master/src/schemas/wview_extended.py)
   schema (it contains the `pm1_0`, `pm2_5` and `pm10_0` columns)
 * The `python-dateutil` and `requests` Python packages
 * A PurpleAir sensor reachable on your local network
+* Recommended: a [purple-proxy](https://chaunceygardiner.github.io/purple-proxy/)
+  polling that sensor.  Filling gaps after downtime requires one; everything
+  else works without it.
 
 Not sure about the schema?  wview_extended is the default for new WeeWX 4
 and 5 installs; only databases created under WeeWX 3 and carried forward
@@ -27,7 +50,7 @@ table, e.g.:
 echo '.schema archive' | sqlite3 /var/lib/weewx/weewx.sdb | grep pm2_5
 ```
 
-## What it does
+## The fields it adds
 
 Every loop packet is populated with:
 
@@ -55,15 +78,13 @@ No extra database configuration is needed: WeeWX automatically accumulates
 the loop values into each archive record, so `pm1_0`, `pm2_5` and `pm10_0`
 land in the database (and in history graphs) on their own.
 
-Gaps are filled in, too.  When WeeWX is not running — a restart, a reboot,
-a power cut — the station's logger keeps recording, and WeeWX archives those
-records when it comes back.  They contain no air quality data, because this
-extension was not there to supply any.  If a
-[purple-proxy](https://chaunceygardiner.github.io/purple-proxy/) is
-configured, the missing `pm1_0`, `pm2_5` and `pm10_0` are fetched from the
-proxy's own archive history and filled in, so an outage no longer leaves a
-hole in the pm columns and the graphs that draw them.  The `pm2_5` written is
-the same EPA-corrected value the live path stores.  See
+Gaps left by downtime are filled in as well.  The missing `pm1_0`, `pm2_5`
+and `pm10_0` are fetched from a
+[purple-proxy](https://chaunceygardiner.github.io/purple-proxy/)'s own archive
+history, so a proxy is what makes this possible; with only direct sensors
+configured there is nothing to ask.  The `pm2_5` written is the same
+EPA-corrected value the live path stores.  See
+[Filling gaps after downtime](#filling-gaps-after-downtime) and
 [What's purple-proxy?](#whats-purple-proxy).
 
 ### The EPA correction
@@ -106,11 +127,11 @@ The category and color remain Hazardous/Maroon.
 
 ### Demo skin
 
-A small demo report is installed at `<HTML_ROOT>/purple`.  It is translatable
-and ships German, French, Dutch and Spanish (see
-[Translations](#translations)):
+A small demo report is installed at `<HTML_ROOT>/purple` — the page shown at
+the top of this README.  It is translatable and ships German, French, Dutch
+and Spanish (see [Translations](#translations)); in German it looks like this:
 
-![PurpleReport](PurpleReport.jpg)
+![The demo page in German](PurpleReport-de.png)
 
 ### Translations
 
@@ -118,7 +139,9 @@ The demo report is translatable through WeeWX's own mechanisms — lang files
 and gettext-style `[Texts]` keys (the English string is the key; a missing
 entry falls back to English one string at a time).  German, French, Dutch and
 Spanish ship (`skins/purple/lang/de.conf`, `fr.conf`, `nl.conf`, `es.conf`;
-corrections welcome — file an issue); select one per report in `weewx.conf`:
+corrections welcome — [file an
+issue](https://github.com/chaunceygardiner/weewx-purple/issues)); select one
+per report in `weewx.conf`:
 
 ```
 [StdReport]
@@ -128,9 +151,8 @@ corrections welcome — file an issue); select one per report in `weewx.conf`:
 
 `[StdReport] [[Defaults]] lang = de` instead switches every skin that ships
 German at once; a skin lacking the language is a logged no-op, not an error.
-Language support needs WeeWX 4.6 or later.  To add a language, copy
-`skins/purple/lang/en.conf` — the reference dictionary, kept exact by a
-test — and translate the values.
+To add a language, copy `skins/purple/lang/en.conf` — the reference
+dictionary, kept exact by a test — and translate the values.
 
 ### What's purple-proxy?
 

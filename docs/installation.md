@@ -13,7 +13,7 @@ description: Requirements and step-by-step installation of the weewx-purple exte
 
 ## Requirements
 
-* WeeWX 4 or 5 (selecting a demo-skin language needs WeeWX 4.6 or later)
+* WeeWX 4.6 or later
 * Python 3.7 or greater
 * The [wview_extended](https://github.com/weewx/weewx/blob/master/src/schemas/wview_extended.py)
   schema (it contains the `pm1_0`, `pm2_5` and `pm10_0` columns)
@@ -99,6 +99,12 @@ command and restart WeeWX.  Note that upgrading replaces the bundled skin
 (`skins/purple/`) — if you customized it, save a copy first.  Overrides
 placed in weewx.conf (report `[[[Labels]]]`/`[[[Texts]]]` entries, an
 `[Accumulator]` section) survive upgrades.
+
+**Upgrading to 7.1 from an earlier release:** weewx-purple now requires
+WeeWX 4.6 or later.  On WeeWX 4.0 through 4.5 the install is refused, and so
+is startup, with `weewx-purple requires WeeWX 4.6 or later, found <version>`.
+Upgrade WeeWX first.  Nothing else about this upgrade needs configuration
+changes.
 
 **Upgrading to 7.0 from an earlier release:** if you poll a purple-proxy,
 change `timeout` to 1 in every `[[ProxyN]]` section of weewx.conf.  A proxy
