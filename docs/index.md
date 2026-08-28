@@ -1,5 +1,8 @@
 ---
-title: weewx-purple — PurpleAir air quality for WeeWX
+title: Home
+layout: default
+nav_order: 1
+permalink: /
 description: A WeeWX extension that reads a PurpleAir sensor (or purple-proxy), inserts EPA-corrected PM2.5 into every loop packet, and serves AQI and its color on demand as XTypes.
 ---
 
@@ -8,14 +11,9 @@ description: A WeeWX extension that reads a PurpleAir sensor (or purple-proxy), 
 **PurpleAir air quality for WeeWX** — EPA-corrected PM2.5 in every loop
 packet; AQI and its color computed on demand, never stored.
 
-[Installation](installation.md) ·
-[Configuration](configuration.md) ·
-[Fields in reports](fields.md) ·
-[Translating (i18n)](i18n.md) ·
-[Troubleshooting](troubleshooting.md) ·
-[GitHub project](https://github.com/chaunceygardiner/weewx-purple)
-
----
+[View on GitHub](https://github.com/chaunceygardiner/weewx-purple){: .btn .btn-primary }
+[Download weewx-purple.zip](https://github.com/chaunceygardiner/weewx-purple/releases/latest/download/weewx-purple.zip){: .btn }
+[Report an issue](https://github.com/chaunceygardiner/weewx-purple/issues){: .btn }
 
 weewx-purple reads a [PurpleAir](https://www2.purpleair.com/) air quality
 sensor on the local network (or a

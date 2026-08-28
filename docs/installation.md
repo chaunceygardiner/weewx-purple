@@ -1,16 +1,13 @@
 ---
-title: Installing weewx-purple
+title: Installation
+layout: default
+nav_order: 2
 description: Requirements and step-by-step installation of the weewx-purple extension.
 ---
 
 # Installing weewx-purple
 
-[Home](index.md) ·
-[Configuration](configuration.md) ·
-[Fields in reports](fields.md) ·
-[Translating (i18n)](i18n.md) ·
-[Troubleshooting](troubleshooting.md) ·
-[GitHub project](https://github.com/chaunceygardiner/weewx-purple)
+[weewx-purple manual](https://chaunceygardiner.github.io/weewx-purple/) · [weewx-purple on GitHub](https://github.com/chaunceygardiner/weewx-purple) · [Report an issue](https://github.com/chaunceygardiner/weewx-purple/issues)
 
 ---
 

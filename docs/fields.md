@@ -1,16 +1,13 @@
 ---
-title: weewx-purple fields in reports
+title: Fields in reports
+layout: default
+nav_order: 4
 description: Using pm1_0, pm2_5, pm10_0, pm2_5_aqi and pm2_5_aqi_color in WeeWX reports — tags, aggregates, graphs, and how AQI is computed and (not) stored.
 ---
 
 # weewx-purple fields in reports
 
-[Home](index.md) ·
-[Installation](installation.md) ·
-[Configuration](configuration.md) ·
-[Translating (i18n)](i18n.md) ·
-[Troubleshooting](troubleshooting.md) ·
-[GitHub project](https://github.com/chaunceygardiner/weewx-purple)
+[weewx-purple manual](https://chaunceygardiner.github.io/weewx-purple/) · [weewx-purple on GitHub](https://github.com/chaunceygardiner/weewx-purple) · [Report an issue](https://github.com/chaunceygardiner/weewx-purple/issues)
 
 ---
 

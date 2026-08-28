@@ -1,16 +1,13 @@
 ---
-title: Configuring weewx-purple
+title: Configuration
+layout: default
+nav_order: 3
 description: The [Purple] section of weewx.conf — sensors, proxies, polling, source order and freshness.
 ---
 
 # Configuring weewx-purple
 
-[Home](index.md) ·
-[Installation](installation.md) ·
-[Fields in reports](fields.md) ·
-[Translating (i18n)](i18n.md) ·
-[Troubleshooting](troubleshooting.md) ·
-[GitHub project](https://github.com/chaunceygardiner/weewx-purple)
+[weewx-purple manual](https://chaunceygardiner.github.io/weewx-purple/) · [weewx-purple on GitHub](https://github.com/chaunceygardiner/weewx-purple) · [Report an issue](https://github.com/chaunceygardiner/weewx-purple/issues)
 
 ---
 

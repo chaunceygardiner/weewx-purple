@@ -1,6 +1,49 @@
 # GitHub Pages configuration for https://chaunceygardiner.github.io/weewx-purple/
-theme: jekyll-theme-primer
 title: weewx-purple
-description: "PurpleAir air quality for WeeWX -- EPA-corrected PM2.5 in every loop packet, AQI and its color computed on demand as XTypes"
+description: >-
+  PurpleAir air quality for WeeWX -- EPA-corrected PM2.5 in every loop
+  packet, AQI and its color computed on demand as XTypes, and the archive
+  periods WeeWX was down for filled in from a purple-proxy's own archive
+  history.
+url: "https://chaunceygardiner.github.io"
+baseurl: "/weewx-purple"
+
+# Pinned to the same version the other manuals render from, so they cannot
+# drift apart when upstream releases.
+remote_theme: just-the-docs/just-the-docs@v0.12.0
 plugins:
+  - jekyll-remote-theme
   - jekyll-sitemap
+  # Turns the .md links between pages into real URLs.  GitHub Pages enables
+  # this by default; naming it here keeps a local jekyll build identical.
+  - jekyll-relative-links
+
+search_enabled: true
+heading_anchors: true
+
+aux_links:
+  "weewx-purple on GitHub":
+    - "https://github.com/chaunceygardiner/weewx-purple"
+aux_links_new_tab: true
+
+# External links shown at the bottom of the left sidebar nav, on every page.
+nav_external_links:
+  - title: weewx-purple on GitHub
+    url: https://github.com/chaunceygardiner/weewx-purple
+  - title: Download weewx-purple.zip
+    url: https://github.com/chaunceygardiner/weewx-purple/releases/latest/download/weewx-purple.zip
+
+callouts:
+  note:
+    title: Note
+    color: blue
+  important:
+    title: Important
+    color: red
+  tip:
+    title: Tip
+    color: green
+
+footer_content: >-
+  weewx-purple is Copyright &copy; 2020&ndash;2026 John A Kline and is
+  licensed under the GNU Public License v3.
