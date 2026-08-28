@@ -122,8 +122,9 @@ class Source:
             self.timeout = to_int(source_dict.get('timeout', 1))
         else:
             self.port = to_int(source_dict.get('port', 80))
-            # A sensor's own processor is slow and easily overwhelmed.
-            self.timeout = to_int(source_dict.get('timeout', 10))
+            # A sensor's own processor is slow and easily overwhelmed, so
+            # give it more room than a proxy.
+            self.timeout = to_int(source_dict.get('timeout', 15))
 
 @dataclass
 class Concentrations:

@@ -25,6 +25,12 @@ from weecfg.extension import ExtensionInstaller
 # Written as weewx.conf text rather than a dict so that the stanza weectl
 # merges into a fresh weewx.conf arrives with its comments: ConfigObj keeps
 # them, a dict has nowhere to put them.
+#
+# ORDER MATTERS: ConfigObj attaches a comment block to the NEXT key, so a
+# commented-out option must be followed by a live key IN THE SAME SECTION.
+# Last in its section, it attaches to whatever section comes next and is
+# re-indented to the parent's level, landing outside the block it documents.
+# Hence hostname last in every source section.
 CONFIG="""
 [StdReport]
     [[PurpleReport]]
@@ -43,9 +49,14 @@ CONFIG="""
     # further sources are tried.  The numbering of each kind must start at
     # 1 and be consecutive; a gap ends the scan, so a Proxy3 with no Proxy2
     # is never reached.
+    #
+    # An option shown commented out is one the extension supplies itself.
+    # Leave it commented and the extension's own value governs, including
+    # a better one a later release might bring.  Uncomment it to pin this
+    # station to the value written here.
 
     # How often to poll the sensor in seconds
-    poll_secs = 15
+    #poll_secs = 15
 
     # Proxies are instances of purple-proxy.  Proxies are tried before
     # sensors, in the order listed here, until one yields a good reading.
@@ -53,65 +64,67 @@ CONFIG="""
     # filling gaps after WeeWX downtime requires one.
     [[Proxy1]]
         enable = False
-        # Replace with the host name or IP address of the machine running
-        # the first purple-proxy
-        hostname = proxy1
-        # The port purple-proxy listens on (its server-port, 8000 by default)
-        port = 8000
+        # The port purple-proxy listens on (its server-port)
+        #port = 8000
         # http timeout (seconds).  A proxy answers from its own cache
         # rather than going to the sensor, so it can be short.
-        timeout = 1
+        #timeout = 1
+        # PLACEHOLDER -- replace with the host name or IP address of the
+        # machine running the first purple-proxy
+        hostname = proxy1
     [[Proxy2]]
         enable = False
-        # Replace with the host name or IP address of the machine running
-        # the second purple-proxy
-        hostname = proxy2
-        # The port purple-proxy listens on (its server-port, 8000 by default)
-        port = 8000
+        # The port purple-proxy listens on (its server-port)
+        #port = 8000
         # http timeout (seconds).  A proxy answers from its own cache
         # rather than going to the sensor, so it can be short.
-        timeout = 1
+        #timeout = 1
+        # PLACEHOLDER -- replace with the host name or IP address of the
+        # machine running the second purple-proxy
+        hostname = proxy2
     [[Proxy3]]
         enable = False
-        # Replace with the host name or IP address of the machine running
-        # the third purple-proxy
-        hostname = proxy3
-        # The port purple-proxy listens on (its server-port, 8000 by default)
-        port = 8000
+        # The port purple-proxy listens on (its server-port)
+        #port = 8000
         # http timeout (seconds).  A proxy answers from its own cache
         # rather than going to the sensor, so it can be short.
-        timeout = 1
+        #timeout = 1
+        # PLACEHOLDER -- replace with the host name or IP address of the
+        # machine running the third purple-proxy
+        hostname = proxy3
     [[Proxy4]]
         enable = False
-        # Replace with the host name or IP address of the machine running
-        # the fourth purple-proxy
-        hostname = proxy4
-        # The port purple-proxy listens on (its server-port, 8000 by default)
-        port = 8000
+        # The port purple-proxy listens on (its server-port)
+        #port = 8000
         # http timeout (seconds).  A proxy answers from its own cache
         # rather than going to the sensor, so it can be short.
-        timeout = 1
+        #timeout = 1
+        # PLACEHOLDER -- replace with the host name or IP address of the
+        # machine running the fourth purple-proxy
+        hostname = proxy4
 
     # Sensors are the PurpleAir devices themselves.  Sensor1 is enabled
     # here so that a fresh install works with no proxy; disable it if you
     # run a proxy and would rather not have WeeWX talk to the sensor too.
     [[Sensor1]]
         enable = True
-        # Replace with the host name or IP address of the first sensor
-        hostname = purple-air
-        # Port is usually 80
-        port = 80
+        # The port the sensor's own web server listens on
+        #port = 80
         # http timeout (seconds).  A sensor's own processor is slow and
         # easily overwhelmed, so give it more room than a proxy.
-        timeout = 15
+        #timeout = 15
+        # PLACEHOLDER -- replace with the host name or IP address of
+        # the first sensor
+        hostname = purple-air
     [[Sensor2]]
         enable = False
-        # Replace with the host name or IP address of the second sensor
-        hostname = purple-air2
-        # Port is usually 80
-        port = 80
+        # The port the sensor's own web server listens on
+        #port = 80
         # http timeout (seconds)
-        timeout = 15
+        #timeout = 15
+        # PLACEHOLDER -- replace with the host name or IP address of
+        # the second sensor
+        hostname = purple-air2
 """
 
 purple_dict = configobj.ConfigObj(StringIO(CONFIG))

@@ -16,23 +16,38 @@ sensor(s):
 
 ```
 [Purple]
-    poll_secs = 15
+    # How often to poll the sensor in seconds
+    #poll_secs = 15
     [[Sensor1]]
         enable = true
+        # The port the sensor's own web server listens on
+        #port = 80
+        # http timeout (seconds)
+        #timeout = 15
+        # PLACEHOLDER -- replace with the host name or IP address of
+        # the first sensor
         hostname = purple-air
-        port = 80
-        timeout = 15
     [[Sensor2]]
         enable = false
+        #port = 80
+        #timeout = 15
         hostname = purple-air2
-        port = 80
-        timeout = 15
     [[Proxy1]]
         enable = false
+        #port = 8000
+        #timeout = 1
         hostname = proxy1
-        port = 8000
-        timeout = 1
 ```
+
+The options the install writes commented out are the ones weewx-purple
+supplies for itself.  Leave one commented and the extension's own value
+governs, including a better one a later release might bring; uncomment it to
+pin this station to the value shown.  `hostname` is written live because
+there is nothing to fall back on -- it is the one you have to replace with
+your own.  `enable` is written live for a different reason: `Sensor1` ships
+enabled so that a fresh install works with no proxy, and that is not what an
+absent `enable` means.  Leave `enable` out of a section and that source is
+simply off.
 
 | Option      | Default              | Meaning                                          |
 |-------------|----------------------|--------------------------------------------------|
@@ -40,7 +55,7 @@ sensor(s):
 | `enable`    | false                | Whether this source is polled                    |
 | `hostname`  |                      | Hostname or IP address of the sensor/proxy       |
 | `port`      | 80 (sensor) / 8000 (proxy) | Port to connect on                         |
-| `timeout`   | 1 (proxy) / 10 (sensor) | HTTP timeout (seconds).  A proxy answers from its own database on the local network, so a second is ample; a sensor's own processor is slow, and the installer writes 15 for one. |
+| `timeout`   | 1 (proxy) / 15 (sensor) | HTTP timeout (seconds).  A proxy answers from its own database on the local network, so a second is ample; a sensor's own processor is slow and easily overwhelmed, so it gets more room. |
 
 PurpleAir sensors are specified with subsections `[[Sensor1]]`, `[[Sensor2]]`,
 etc.; purple-proxy services with `[[Proxy1]]`, `[[Proxy2]]`, etc.  There is no

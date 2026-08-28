@@ -1,6 +1,23 @@
 weewx-purple change history
 ---------------------------
 
+7.x (in development)
+--------------------
+- The options weewx-purple has its own default for -- poll_secs, and each
+  source's port and timeout -- are now written into weewx.conf COMMENTED
+  OUT rather than live.  Existing installations are untouched: an upgrade
+  never rewrites an existing weewx.conf, so whatever your [Purple] section
+  says today it goes on saying.  On a fresh install the option is visible
+  with the value it is set to, but it is the extension that supplies that
+  value, so a station that leaves it commented follows the default forward
+  if a later release improves it; uncommenting it pins the station to the
+  value written there.  What stays live is each source's enable and
+  hostname -- the switch and the placeholder you have to replace with your
+  own -- and the [StdReport] entries the report engine needs.  Each
+  hostname's comment now leads with PLACEHOLDER, so the one kind of line
+  that breaks the extension if you leave it alone says so first rather than
+  last.
+
 7.1 08/28/2026
 --------------------
 - ACTION REQUIRED for installations running WeeWX earlier than 4.6:
