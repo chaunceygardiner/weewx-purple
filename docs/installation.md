@@ -90,10 +90,11 @@ echo '.schema archive' | sqlite3 /var/lib/weewx/weewx.sdb | grep pm2_5
    weectl extension install weewx-purple.zip
    ```
 
-   WeeWX 4 (adjust the path if WeeWX is not installed in /home/weewx):
+   WeeWX 4 (on a setup.py install use the full path, e.g.
+   `/home/weewx/bin/wee_extension`; a package install has it on the path):
 
    ```
-   sudo /home/weewx/bin/wee_extension --install weewx-purple.zip
+   sudo wee_extension --install weewx-purple.zip
    ```
 
 1. Edit the `[Purple]` section of weewx.conf (created by the install) to
