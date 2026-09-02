@@ -1,8 +1,34 @@
 weewx-purple change history
 ---------------------------
 
-7.x (in development)
+7.2 09/02/2026
 --------------------
+- The sample report is now a page rather than a headline.  It opens with a
+  six-segment dial of the US EPA AQI categories, the category the current
+  reading falls in, that category's health sentence, and all three
+  particulate sizes -- pm1_0, pm2_5 and pm10_0 -- side by side; until now
+  the page showed one of the three and spent the AQI color on a line of
+  text.  Below it are the day's peak, average and low AQI (the peak with
+  the time it happened), a count of the hours above Good, and a strip of
+  the last 24 hours with one cell per hour colored by its category, so a
+  smoke day is legible at a glance.  The four period plots stay where they
+  were, in their own card behind the same Day/Week/Month/Year tabs.
+- The page wears your station's name.  Its heading and browser title are
+  now built from [Station] location in weewx.conf -- "Palo Alto, CA Air
+  Quality" rather than "WeeWX-Purple Demo Page" -- because the report that
+  ships with an extension is the one most stations actually put on their
+  site, and it should not announce the extension to their visitors.  A
+  station that has set no location gets a plain "Air Quality".  The
+  location sits inside the translatable phrase rather than being glued to
+  it, so each language places it and its preposition where it belongs.
+- Twenty new translatable strings come with it -- the six category names,
+  their six health sentences, the card headings and the tile labels -- and
+  German, French, Dutch and Spanish translations of every one.  The
+  sample report's own dictionary, lang/en.conf, also gains labels for pm1_0 and
+  pm10_0, which the page now shows.
+- The plots are a little taller (image_height 180 -> 230) and are drawn in
+  the page's purple rather than the stock blue.  Particulate readouts now
+  carry one decimal: a clean day reads 0.9, 3.0, 1.6 rather than 1, 3, 2.
 - The options weewx-purple has its own default for -- poll_secs, and each
   source's port and timeout -- are now written into weewx.conf COMMENTED
   OUT rather than live.  Existing installations are untouched: an upgrade

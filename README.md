@@ -28,7 +28,10 @@ catch-up records your logger hands over when WeeWX returns carry no air
 quality data of their own — nothing was running to supply any.  See
 [Filling gaps after downtime](#filling-gaps-after-downtime).
 
-![The demo page](PurpleReport.jpg)
+![The sample report](PurpleReport.jpg)
+
+*Shown on 09/11/2020, the day wildfire smoke turned the Bay Area sky
+orange.  Most days are green; this is the one the colors are for.*
 
 **Requires:**
 * WeeWX 4.6 or later
@@ -125,17 +128,27 @@ the same slope as AQI 301-500 (per the May 2024
 [AirNow Technical Assistance Document](https://document.airnow.gov/technical-assistance-document-for-the-reporting-of-daily-air-quailty.pdf)).
 The category and color remain Hazardous/Maroon.
 
-### Demo skin
+### Sample report
 
-A small demo report is installed at `<HTML_ROOT>/purple` — the page shown at
-the top of this README.  It is translatable and ships German, French, Dutch
-and Spanish (see [Translations](#translations)); in German it looks like this:
+A small sample report is installed at `<HTML_ROOT>/purple` — the page shown at
+the top of this README.  It is meant to be usable as it stands, not just
+looked at: it takes its heading and browser title from your `[Station]`
+`location`, so it reads *Palo Alto, CA Air Quality* rather than naming this
+extension.  It leads with the current AQI on a dial of the six
+US EPA categories, the category it falls in and that category's health
+advice, and all three particulate sizes; then the day's peak, average and
+low, and a cell per hour for the last twenty-four, each colored by its
+category, so a smoke day is legible at a glance.  The four period plots are
+behind the Day/Week/Month/Year tabs at the foot of the page.
 
-![The demo page in German](PurpleReport-de.png)
+It is translatable and ships German, French, Dutch and Spanish (see
+[Translations](#translations)); in German it looks like this:
+
+![The sample report in German](PurpleReport-de.png)
 
 ### Translations
 
-The demo report is translatable through WeeWX's own mechanisms — lang files
+The sample report is translatable through WeeWX's own mechanisms — lang files
 and gettext-style `[Texts]` keys (the English string is the key; a missing
 entry falls back to English one string at a time).  German, French, Dutch and
 Spanish ship (`skins/purple/lang/de.conf`, `fr.conf`, `nl.conf`, `es.conf`;
@@ -368,13 +381,31 @@ $current.pm2_5_aqi
 $current.pm2_5_aqi_color
 ```
 
-Aggregates work for both the database-backed fields and the AQI xtypes
-(supported AQI aggregates: `avg`, `min`, `max`, `first`, `last`, `count`):
+Aggregates work for both the database-backed fields and the AQI xtypes.
+The xtype itself implements `avg`, `min`, `max`, `first`, `last` and
+`count`, and serves spans covering whole days out of the `pm2_5` daily
+summaries:
 
 ```
 $day.pm2_5.max
 $week.pm2_5.avg
 $day.pm2_5_aqi.max
+```
+
+Ask for any other aggregate — `maxtime`, `mintime`, `sum` — and WeeWX falls
+through to its own generic handler, which walks the span record by record
+converting each one.  That does work, but it reads every archive row
+instead of the daily summaries, and it raises `UnknownAggregation` if any
+record in the span has a NULL `pm2_5` — which is exactly what an outage
+leaves behind.
+
+For the *time* of a peak, use `pm2_5` rather than the xtype.  AQI is a
+non-decreasing function of PM2.5, so the moment the AQI peaked is the
+moment `pm2_5` peaked, and `pm2_5` is a real column whose `maxtime` comes
+straight off the daily summary:
+
+```
+$day.pm2_5_aqi.max at $day.pm2_5.maxtime
 ```
 
 Both `pm2_5_aqi` and `pm2_5_aqi_color` can also be graphed, e.g. in
@@ -504,6 +535,11 @@ xtype:
   configured proxy could answer for that period, so its pm columns were left
   empty.  Logged once per archive record, which is also how a proxy that is
   down makes itself heard for as long as it stays down.
+* **The sample report shows the top card but no tiles or hourly strip.**  Those
+  need at least one PM2.5 reading recorded for the current day: they are
+  absent between midnight and the first archive record, and stay absent for
+  as long as the sensor has been unreachable since midnight.  They reappear
+  on the report cycle after a reading lands.
 * **The pm columns are empty for a stretch of time.**  WeeWX was not running
   then, and the periods were filled only if a proxy could answer for them —
   see [Filling gaps after downtime](#filling-gaps-after-downtime).

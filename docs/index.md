@@ -93,16 +93,27 @@ the same slope as AQI 301-500 (per the May 2024
 [AirNow Technical Assistance Document](https://document.airnow.gov/technical-assistance-document-for-the-reporting-of-daily-air-quailty.pdf)).
 The category and color remain Hazardous/Maroon.
 
-## The demo skin
+## The sample report
 
-A small demo report is installed at `<HTML_ROOT>/purple`:
+A small sample report is installed at `<HTML_ROOT>/purple`.  It is meant to be
+usable as it stands: it takes its heading and browser title from your
+`[Station]` `location`, so it reads *Palo Alto, CA Air Quality* rather than
+naming this extension.  It leads with the current AQI on a dial of the six
+categories above, the category it falls in and that category's health
+advice, and all three particulate sizes; then the
+day's peak, average and low, and a cell per hour for the last twenty-four,
+each colored by its category.  The four period plots are behind the
+Day/Week/Month/Year tabs at the foot of the page:
 
-![The demo page](https://raw.githubusercontent.com/chaunceygardiner/weewx-purple/master/PurpleReport.jpg)
+![The sample report](https://raw.githubusercontent.com/chaunceygardiner/weewx-purple/master/PurpleReport.jpg)
+
+*Shown on 09/11/2020, the day wildfire smoke turned the Bay Area sky
+orange.  Most days are green; this is the one the colors are for.*
 
 The page is translatable, and German, French, Dutch and Spanish ship with
 it — see [Translating (i18n)](i18n.md):
 
-![The demo page in German](https://raw.githubusercontent.com/chaunceygardiner/weewx-purple/master/PurpleReport-de.png)
+![The sample report in German](https://raw.githubusercontent.com/chaunceygardiner/weewx-purple/master/PurpleReport-de.png)
 
 ## What's purple-proxy?
 

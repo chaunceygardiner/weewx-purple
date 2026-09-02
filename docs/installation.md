@@ -114,6 +114,11 @@ command and restart WeeWX.  Note that upgrading replaces the bundled skin
 placed in weewx.conf (report `[[[Labels]]]`/`[[[Texts]]]` entries, an
 `[Accumulator]` section) survive upgrades.
 
+**Upgrading to 7.2 from an earlier release:** no configuration changes are
+needed.  7.2 rewrites the sample report's template and its lang files, so a
+customized `skins/purple/` is replaced wholesale rather than merged — save
+your copy first if you have one.
+
 **Upgrading to 7.1 from an earlier release:** weewx-purple now requires
 WeeWX 4.6 or later.  On WeeWX 4.0 through 4.5 the install is refused, and so
 is startup, with `weewx-purple requires WeeWX 4.6 or later, found <version>`.

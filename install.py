@@ -34,7 +34,8 @@ from weecfg.extension import ExtensionInstaller
 CONFIG="""
 [StdReport]
     [[PurpleReport]]
-        # The "PurpleReport" uses the "purple" skin, which showcases the extension.
+        # The "PurpleReport" uses the "purple" skin: a small air quality
+        # report, ready to use as it stands.
         # Images and files are placed in a dedicated subdirectory.
         HTML_ROOT = purple
         enable = true
@@ -153,7 +154,7 @@ def loader():
     if sys.version_info[0] < 3 or (sys.version_info[0] == 3 and sys.version_info[1] < 7):
         sys.exit("weewx-purple requires Python 3.7 or later, found %s.%s" % (sys.version_info[0], sys.version_info[1]))
 
-    # The demo skin's template uses $gettext and $lang, which arrived in
+    # The sample report's template uses $gettext and $lang, which arrived in
     # WeeWX 4.6.0 (02/04/2022).
     if not weewx_version_at_least((4, 6)):
         sys.exit("weewx-purple requires WeeWX 4.6 or later, found %s" % weewx.__version__)
@@ -163,7 +164,7 @@ def loader():
 class PurpleInstaller(ExtensionInstaller):
     def __init__(self):
         super(PurpleInstaller, self).__init__(
-            version="7.1",
+            version="7.2",
             name='purple',
             description='Collect air quality readings from PurpleAir sensors (or purple-proxy).',
             author="John A Kline",

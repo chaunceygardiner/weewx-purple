@@ -1550,6 +1550,33 @@ class TestGetAggregate(unittest.TestCase):
             self.assertEqual(vt.value, expected, 'aggregate %s' % agg)
             self.assertEqual(vt.unit, 'aqi')
 
+    def test_a_leading_null_does_not_hide_the_days_aggregates(self):
+        """A NULL pm2_5 at the START of the span -- what an outage across
+        midnight leaves behind, the catchup records WeeWX archives on restart
+        for periods no proxy could fill -- stops none of the aggregates the
+        sample report's tiles read.
+
+        It does stop `$day.pm2_5_aqi.has_data`, and that is why the page
+        gates on `$day.pm2_5.has_data` instead (pinned by
+        TestSkinCategoryTable).  has_data resolves through the 'not_null'
+        aggregate, which this xtype does not implement; WeeWX falls through
+        to XTypeTable, whose record walk catches only CannotCalculate, while
+        get_scalar raises UnknownType on a NULL pm2_5.  A leading NULL kills
+        the walk before it reaches a good record; a NULL later in the day is
+        harmless, because the walk has already returned True.  The second
+        half of this test pins that raise -- if WeeWX or this xtype ever
+        makes the walk survive a NULL, this test still passes and the gate
+        simply stops mattering."""
+        self.insert_archive([(2000, None), (3000, 9.0), (4000, 55.4)])
+        span = weeutil.weeutil.TimeSpan(1000, 5000)
+        for agg, expected in (('max', 150), ('min', 50), ('avg', 94),
+                              ('first', 50), ('last', 150), ('count', 2)):
+            vt = AQI.get_aggregate('pm2_5_aqi', span, agg, self.db_manager)
+            self.assertEqual(vt.value, expected, 'aggregate %s' % agg)
+        with self.assertRaises(weewx.UnknownType):
+            AQI.get_scalar('pm2_5_aqi',
+                           {'dateTime': 2000, 'usUnits': weewx.US, 'pm2_5': None})
+
     def test_count_is_not_aqi_transformed(self):
         # Regression: count used to be run through the AQI computation.
         self.insert_archive([(2000, 9.0), (3000, 35.4), (4000, 55.4)])
@@ -1679,7 +1706,7 @@ class TestInstallerConfig(unittest.TestCase):
         self.assertEqual(report['skin'], 'purple')
 
     def test_demo_report_is_enabled_by_default(self):
-        # The demo page is meant to render without the user turning it on.
+        # The sample report is meant to render without the user turning it on.
         report = self.installer_config()['StdReport']['PurpleReport']
         self.assertTrue(weeutil.weeutil.to_bool(report['enable']))
 
@@ -1850,7 +1877,7 @@ class TestInstallerConfig(unittest.TestCase):
 
 
 class TestI18n(unittest.TestCase):
-    """The demo skin's translation plumbing -- the same machinery
+    """The sample report's translation plumbing -- the same machinery
     weewx-skyfield/celestial/loopdata ship: [Texts] is gettext-style (the
     English string IS the key; a report falls back to it one string at a
     time) and observation labels ride [Labels] [[Generic]].
@@ -1952,7 +1979,7 @@ class TestI18n(unittest.TestCase):
         # And en.conf still supplies what skin.conf no longer does.
         en = self.lang_conf('en.conf')
         self.assertEqual(sorted(en['Labels']['Generic']),
-                         ['pm2_5', 'pm2_5_aqi'])
+                         ['pm10_0', 'pm1_0', 'pm2_5', 'pm2_5_aqi'])
 
     def test_skin_conf_sets_lang(self):
         """skin.conf must keep `lang = en`.  It is load-bearing now that
@@ -2034,6 +2061,23 @@ class TestI18n(unittest.TestCase):
                              set(en['ImageGenerator']['year_images'].scalars),
                              lang)
 
+    def test_every_language_keeps_the_location_placeholder(self):
+        """The page heading is built with
+        `$gettext("{location} Air Quality").format(location=...)`, so every
+        translation of that key must still carry a literal `{location}`.
+        A translator who localizes the placeholder itself, or drops it,
+        turns every report cycle into a KeyError or silently loses the
+        station's name -- and the phrase is deliberately translated whole,
+        preposition included, so it is an easy thing to get wrong."""
+        key = '{location} Air Quality'
+        for lang in self.LANGUAGES:
+            texts = self.lang_conf(lang + '.conf')['Texts']
+            self.assertIn(key, texts, lang)
+            self.assertIn('{location}', texts[key], (lang, texts[key]))
+            # Exactly one slot, and no other format field to trip .format().
+            self.assertEqual(texts[key].count('{'), 1, (lang, texts[key]))
+            self.assertEqual(texts[key].count('}'), 1, (lang, texts[key]))
+
     def test_matches_weewx_seasons_vocabulary(self):
         """The plot-period tabs are copied from WeeWX's own Seasons lang
         files; if a sibling weewx checkout is present, pin them to it."""
@@ -2050,14 +2094,86 @@ class TestI18n(unittest.TestCase):
                 encoding='utf-8', file_error=True)
             conf = self.lang_conf(lang + '.conf')
             shared = ours & set(seasons['Texts'])
-            self.assertEqual(shared, {'Day', 'Week', 'Month', 'Year'}, lang)
+            self.assertEqual(shared,
+                             {'Day', 'Week', 'Month', 'Year', 'History'}, lang)
             for key in shared:
                 self.assertEqual(conf['Texts'][key], seasons['Texts'][key],
                                  (lang, key))
 
 
+class TestSkinCategoryTable(unittest.TestCase):
+    """The sample report's template names the six EPA categories and paints a six
+    segment dial.  Both key off one list, $aqi_tops, and both must keep
+    step with AQI.compute_pm2_5_aqi_color() in bin/user/purple.py -- the
+    page is the only place the categories are spelled out in words, and a
+    palette or breakpoint change there would otherwise leave the page
+    quietly mislabeling readings."""
+
+    REPO_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    TEMPLATE = os.path.join(REPO_DIR, 'skins', 'purple', 'index.html.tmpl')
+
+    @classmethod
+    def template(cls) -> str:
+        with open(cls.TEMPLATE, encoding='utf-8') as f:
+            return f.read()
+
+    @classmethod
+    def aqi_tops(cls):
+        m = re.search(r'#set \$aqi_tops = \[([^\]]+)\]', cls.template())
+        assert m, 'the template no longer sets $aqi_tops'
+        return [int(part) for part in m.group(1).split(',')]
+
+    def test_tops_are_the_color_boundaries(self):
+        """Every ceiling in $aqi_tops is a real category boundary, and there
+        are no boundaries the template does not know about."""
+        tops = self.aqi_tops()
+        boundaries = [aqi for aqi in range(1, 601)
+                      if AQI.compute_pm2_5_aqi_color(aqi)
+                      != AQI.compute_pm2_5_aqi_color(aqi - 1)]
+        self.assertEqual(boundaries, [top + 1 for top in tops])
+
+    def test_one_name_and_one_sentence_per_category(self):
+        """Six ceilings' worth of categories means six names and six health
+        sentences; a short list would raise IndexError mid-render, and only
+        for readings that reach the missing category."""
+        template = self.template()
+        wanted = len(self.aqi_tops()) + 1
+        for listname in ('aqi_names', 'aqi_blurbs'):
+            self.assertEqual(
+                len(re.findall(r'#silent \$%s\.append\(' % listname, template)),
+                wanted, listname)
+
+    def test_the_days_block_gates_on_pm2_5(self):
+        """The tiles and the hourly strip must be gated on
+        `$day.pm2_5.has_data`, never on `$day.pm2_5_aqi.has_data`: a NULL
+        pm2_5 in the day's FIRST record makes the latter False while every
+        aggregate the block reads still answers, so the block would vanish
+        for the rest of the day after exactly the outage 7.0's backfill
+        exists to describe.  See
+        TestGetAggregate.test_a_leading_null_does_not_hide_the_days_aggregates.
+
+        Comment lines are stripped first: the template explains this in
+        prose, and the prose names the spelling it is warning against."""
+        directives = '\n'.join(line for line in self.template().splitlines()
+                                if not line.lstrip().startswith('##'))
+        self.assertIn('#if $day.pm2_5.has_data', directives)
+        self.assertNotIn('$day.pm2_5_aqi.has_data', directives)
+
+    def test_dial_segments_are_the_extension_palette(self):
+        """The dial's segment colors are literals -- the one place a color
+        is not asked of the pm2_5_aqi_color xtype -- so pin them to it."""
+        strokes = re.findall(r'<path d="[^"]+" fill="none" stroke="(#[0-9a-f]{6})"',
+                             self.template())
+        tops = self.aqi_tops()
+        # One representative AQI per category: each ceiling, then a value
+        # above the last ceiling for the open-ended top category.
+        expected = ['#%06x' % AQI.compute_pm2_5_aqi_color(aqi)
+                    for aqi in tops + [tops[-1] + 100]]
+        self.assertEqual(strokes, expected)
+
+
 class TestWeewxVersionFloor(unittest.TestCase):
-    """The 4.6 floor: the demo skin's $gettext/$lang arrived in WeeWX 4.6.0."""
+    """The 4.6 floor: the sample report's $gettext/$lang arrived in WeeWX 4.6.0."""
 
     def check(self, version: str) -> bool:
         with mock.patch.object(weewx, '__version__', version):

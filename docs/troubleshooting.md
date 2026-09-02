@@ -29,6 +29,12 @@ description: Log messages, the manual collector harness, and running the hermeti
   empty.  Logged once per archive record, which is also how a proxy that is
   down makes itself heard for as long as it stays down.
 
+* **The sample report shows the top card but no tiles or hourly strip.**  Those
+  need at least one PM2.5 reading recorded for the current day: they are
+  absent between midnight and the first archive record, and stay absent for
+  as long as the sensor has been unreachable since midnight.  They reappear
+  on the report cycle after a reading lands.
+
 * **The pm columns are empty for a stretch of time.**  WeeWX was not running
   then, and the periods were filled only if a proxy could answer for them —
   see [Filling gaps after downtime](configuration.md#filling-gaps-after-downtime).
