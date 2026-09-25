@@ -158,6 +158,13 @@ def datetime_from_reading(dt_str):
     tzinfos = {'CST': tz.gettz("UTC")}
     return parse(dt_str, tzinfos=tzinfos)
 
+def outage_length(since: float, now: float) -> str:
+    """How long readings were stale, as the line saying they are fresh
+    again gives it: whole minutes, which a log reader can take as
+    `after (\\d+) min` to tell a blip from an outage."""
+    return '%d min' % round((now - since) / 60)
+
+
 def reraise_if_terminate(e: BaseException) -> None:
     """weewxd stops by raising Terminate from its SIGTERM signal handler --
     inside whatever the main thread is executing at that instant.  Every
@@ -482,7 +489,8 @@ class Purple(StdService):
 
         self.engine = engine
         self.config_dict = config_dict.get('Purple', {})
-        self.stale_logged = False
+        # When the readings went stale, or None while they are fresh.
+        self.stale_since: Optional[float] = None
 
         # Archive periods this extension put pm data into, per observation.
         # An archive record carries no proof of its own: under hardware record
@@ -570,9 +578,10 @@ class Purple(StdService):
             if self.cfg.concentrations is not None and \
                     self.cfg.concentrations.timestamp is not None and \
                     self.cfg.concentrations.timestamp + self.cfg.fresh_secs >= time.time():
-                if self.stale_logged:
-                    log.info('Fresh concentrations available again.')
-                    self.stale_logged = False
+                if self.stale_since is not None:
+                    log.info('Fresh concentrations available again after %s.'
+                             % outage_length(self.stale_since, time.time()))
+                    self.stale_since = None
                 log.debug('Time of reading being inserted: %s' % timestamp_to_string(self.cfg.concentrations.timestamp))
                 # Insert pm1_0, pm2_5, pm10_0, aqi and aqic into loop packet.
                 values = compute_pm_values(self.cfg.concentrations)
@@ -591,10 +600,11 @@ class Purple(StdService):
                 if 'pm2_5_aqi' in event.packet:
                     event.packet['pm2_5_aqi_color'] = AQI.compute_pm2_5_aqi_color(event.packet['pm2_5_aqi'])
             else:
-                # Log at error level once per outage, not once per loop packet.
-                if not self.stale_logged:
+                # Log at error level once per outage, not once per loop
+                # packet; the line when it ends says how long it lasted.
+                if self.stale_since is None:
                     log.error('Found no fresh concentrations to insert.')
-                    self.stale_logged = True
+                    self.stale_since = time.time()
                 else:
                     log.debug('Found no fresh concentrations to insert.')
 

@@ -139,7 +139,7 @@ on other platforms it serves as a specification of the steps needed.
 ## See it in action
 
 * [Weatherboard&trade; Report](https://www.paloaltoweather.com/weatherboard/)
-* [LiveSeasons Report](https://www.paloaltoweather.com/index.html)
+* [Tempestas Report](https://www.paloaltoweather.com/index.html)
 
 ## Licensing
 

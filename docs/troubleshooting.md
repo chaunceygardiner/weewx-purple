@@ -17,7 +17,8 @@ description: Log messages, the manual collector harness, and running the hermeti
   in `[Purple]`.
 * `Found no fresh concentrations to insert.`: the sensor has stopped
   answering (or is answering with insane readings).  Logged once per outage;
-  `Fresh concentrations available again.` is logged on recovery.
+  `Fresh concentrations available again after 13 min.` is logged on
+  recovery, with how long the outage lasted.
 * `purpleair reading from <host> not sane, ...`: the reason and the offending
   reading are included in the message.
 * `Backfilled pm1_0, pm2_5, pm10_0 into archive record <time>`: an archive

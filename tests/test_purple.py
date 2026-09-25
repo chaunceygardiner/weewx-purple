@@ -695,7 +695,7 @@ class TestNewLoopPacket(unittest.TestCase):
         # and does a synchronous fetch).
         p = Purple.__new__(Purple)
         p.cfg = make_cfg(sources=sources, concentrations=concentrations)
-        p.stale_logged = False
+        p.stale_since = None
         p.archive_interval = 300
         p.injections = {obs: [] for obs in user.purple.PM_OBS}
         p.injection_retention_secs = 600
@@ -781,17 +781,25 @@ class TestNewLoopPacket(unittest.TestCase):
         p.new_loop_packet(event)
         self.assertEqual(event.packet, {})
 
-    def test_stale_logged_once_per_outage(self):
-        p = self.make_purple(self.fresh_concentrations(timestamp=time.time() - 121))
-        p.new_loop_packet(types.SimpleNamespace(packet={}))
-        self.assertTrue(p.stale_logged)
-        p.new_loop_packet(types.SimpleNamespace(packet={}))
-        self.assertTrue(p.stale_logged)
-        # Fresh data again: flag resets.
-        with p.cfg.lock:
-            p.cfg.concentrations = self.fresh_concentrations()
-        p.new_loop_packet(types.SimpleNamespace(packet={}))
-        self.assertFalse(p.stale_logged)
+    def test_an_outage_is_logged_once_each_way_with_its_length(self):
+        """ERROR when the readings go stale, nothing more while they stay
+        stale, INFO with how long it lasted when a fresh one arrives, so an
+        outage reads whole from the recovery line even when the ERROR line
+        is in an earlier log."""
+        clock = [1_000_000.0]
+        p = self.make_purple(self.fresh_concentrations(timestamp=clock[0] - 121))
+        with mock.patch.object(user.purple.time, 'time', lambda: clock[0]), \
+                self.assertLogs('user.purple', level='INFO') as logs:
+            for _ in range(13):                 # stale a minute apart
+                p.new_loop_packet(types.SimpleNamespace(packet={}))
+                clock[0] += 60
+            with p.cfg.lock:
+                p.cfg.concentrations = self.fresh_concentrations(timestamp=clock[0])
+            p.new_loop_packet(types.SimpleNamespace(packet={}))
+        self.assertEqual(logs.output, [
+            'ERROR:user.purple:Found no fresh concentrations to insert.',
+            'INFO:user.purple:Fresh concentrations available again after 13 min.'])
+        self.assertIsNone(p.stale_since)
 
 class TestInjectionTally(unittest.TestCase):
     """What this extension put into loop packets is the only evidence at
