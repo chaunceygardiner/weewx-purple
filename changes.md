@@ -1,23 +1,19 @@
-weewx-purple change history
----------------------------
+# weewx-purple change history
 
-7.2.2 (pending)
----------------
+## 7.2.2 (pending)
 - When fresh concentrations arrive after an outage, the log line saying so
   now says how long they were missing ("Fresh concentrations available again
   after 13 min."), so an outage can be read whole from that one line,
   even when the "Found no fresh concentrations to insert." line that
   began it is in an earlier log.
 
-7.2.1 09/15/2026
-----------------
+## 7.2.1 09/15/2026
 - The sample report renders again on Python 3.11 and earlier, which
   includes Debian bookworm.  Since 7.2 the page was not generated there, and
   the log read "cannot find 'aqi_tops'" (issue #18).  The page itself is
   unchanged.
 
-7.2 09/02/2026
---------------------
+## 7.2 09/02/2026
 - The sample report is now a page rather than a headline.  It opens with a
   six-segment dial of the US EPA AQI categories, the category the current
   reading falls in, that category's health sentence, and all three
@@ -59,8 +55,7 @@ weewx-purple change history
   that breaks the extension if you leave it alone says so first rather than
   last.
 
-7.1 08/28/2026
---------------------
+## 7.1 08/28/2026
 - ACTION REQUIRED for installations running WeeWX earlier than 4.6:
   weewx-purple now requires WeeWX 4.6 or later and will refuse to
   install or start on anything older.  The demo report's template uses
@@ -84,7 +79,7 @@ weewx-purple change history
   was set in skin.conf itself, where a German page kept English plot
   titles and a US month/day date axis.  Setting the language the
   documented way, in weewx.conf, was never affected.  Both values now
-  live only in lang/<lang>.conf, and a test fails if either comes back.
+  live only in `lang/<lang>.conf`, and a test fails if either comes back.
   The lang files' [Units] [[Labels]] entries are gone too -- purple.py
   registers those two unit labels in WeeWX's process-global dictionary,
   which is consulted first, so a lang file could never have translated
@@ -107,8 +102,7 @@ weewx-purple change history
   record generation only; with hardware record generation the interval
   comes from the console.
 
-7.0 08/26/2026
---------------
+## 7.0 08/26/2026
 - ACTION REQUIRED for existing installations that poll a purple-proxy:
   change timeout to 1 in every [[ProxyN]] section of weewx.conf.  A proxy
   answers out of its own database on the local network, so a second is
@@ -139,8 +133,7 @@ weewx-purple change history
   that period.  This requires a proxy: with only directly-polled sensors
   configured there is no history to ask for, and nothing changes.
 
-6.0.1 08/24/2026
-----------------
+## 6.0.1 08/24/2026
 - A sensor whose BME280 has failed (or was never fitted) reports no
   temperature, humidity, dewpoint or pressure at all, and its readings
   are rejected.  The log now says so plainly, and names the chips the
@@ -153,18 +146,17 @@ weewx-purple change history
   hardware, which values to replace.  Contributed by Tom Keffer.  An
   existing weewx.conf is untouched by an upgrade, as always.
 
-6.0 07/31/2026
---------------
+## 6.0 07/31/2026
 - The demo page is now translatable, entirely through WeeWX's own
   mechanisms.  Every string the page renders is either a gettext-style
   [Texts] key (the English string IS the key, and a report falls back
   to English one string at a time, so a partial translation is fine),
   an observation label ([Labels] [[Generic]]) or a unit label
-  ([Units] [[Labels]]), all merged from lang/<lang>.conf over
+  ([Units] [[Labels]]), all merged from `lang/<lang>.conf` over
   skin.conf.  The skin ships lang/en.conf, the reference dictionary:
   a test now fails if a rendered string is missing from it, or if it
   carries a string nothing renders.  Set the language per report with
-  lang = <code> in weewx.conf ([StdReport] [[PurpleReport]]).
+  `lang = <code>` in weewx.conf ([StdReport] [[PurpleReport]]).
   Language support needs WeeWX 4.6 or later.
 - German, French, Dutch and Spanish ship with the skin: lang/de.conf,
   fr.conf, nl.conf and es.conf are complete translations of the
@@ -184,8 +176,7 @@ weewx-purple change history
   configuration, fields in reports, translating, troubleshooting).
 - Insane readings are now logged as warnings (were logged as info).
 
-5.0.1 07/19/2026
-----------------
+## 5.0.1 07/19/2026
 Action required: none for typical installs.  Only if you added a
 pm2_5_aqi/pm2_5_aqi_color column to your database schema, see below.
 
@@ -206,15 +197,16 @@ pm2_5_aqi/pm2_5_aqi_color column to your database schema, see below.
 - If you added an AQI column to your database schema (not suggested by
   this extension's README, but possible), the accumulator no longer fills
   it.  Add to weewx.conf:
-      [StdWXCalculate]
-          [[Calculations]]
-              pm2_5_aqi = prefer_hardware
-              pm2_5_aqi_color = prefer_hardware
+  ```
+  [StdWXCalculate]
+      [[Calculations]]
+          pm2_5_aqi = prefer_hardware
+          pm2_5_aqi_color = prefer_hardware
+  ```
   This computes the stored values through the AQI xtype -- correctly
   EPA-rounded, unlike the averaged values stored before this release.
 
-5.0 07/18/2026
---------------
+## 5.0 07/18/2026
 Action required: none for typical installs.  If a report used
 $span.pm2_5_aqi.sum, remove it (see below).
 
@@ -262,89 +254,69 @@ $span.pm2_5_aqi.sum, remove it (see below).
   [[Sensor1]]) that made a copy-pasted config silently inoperable, and
   removed the bogus starup_timeout option (never read by the code).
 
-4.1 07/12/2026
---------------
+## 4.1 07/12/2026
 - weewx could fail to shut down if SIGTERM arrived while Purple was
   fetching the first sensor reading at startup: the fetch's broad
   exception handlers swallowed weewxd's Terminate.  Shutdown is now
   passed through.
 
-4.0.3 01/14/2025
-----------------
+## 4.0.3 01/14/2025
 Fix SQL for MySQL.
 
-4.0.2 01/14/2025
-----------------
+## 4.0.2 01/14/2025
 Fix color for hazardous.  Fix tests.
 
-4.0.1 12/15/2024
-----------------
+## 4.0.1 12/15/2024
 Update index colors to use EPA color forumulas
 (See table 2 (pg. 4 at  https://document.airnow.gov/technical-assistance-document-for-the-reporting-of-daily-air-quailty.pdf )
 
-
-4.0 11/12/2024
---------------
+## 4.0 11/12/2024
 Update to EPA 2024 AQI Calculation.
 See: https://www.epa.gov/system/files/documents/2024-02/pm-naaqs-air-quality-index-fact-sheet.pdf
 
-3.9.2 04/30/2024
-----------------
+## 3.9.2 04/30/2024
 Added WeeWX 5 install instructions. (Issue #6)
 Fix for mysql complaining about select statement. (Issue #7)
 
-3.9.1 03/27/2024
-----------------
+## 3.9.1 03/27/2024
 When checking for freshness, consider a reading old if its age is > MAx(120s, 3*poll_secs).
 
-3.9 03/02/2024
---------------
+## 3.9 03/02/2024
 Speed up aggregations of xtype AQI by inserting the type at the front.
 
-3.8 02/01/2024
---------------
+## 3.8 02/01/2024
 better logging when sensors wildly differ
 
-3.7 01/18/2024
---------------
+## 3.7 01/18/2024
 Clean up code, was checking for stale readings in two places.
 
-3.6 01/10/2024
---------------
+## 3.6 01/10/2024
 Include hostname in log entry when ignoring insane readings due to age or insanity.
 
-3.5 12/03/2023
---------------
+## 3.5 12/03/2023
 Tweak check for old readings so readings don't age out before the next poll.
 
-3.4 10/26/2023
---------------
+## 3.4 10/26/2023
 Enhance sanity check to look for wild discrepancies between a and b sensors.
 
-3.3 04/23/2023
---------------
+## 3.3 04/23/2023
 Add missing instruction in README to install python3-dateutil.
 Make poll interval (poll_secs) configurable (default: 15s).
 
-3.2 10/07/2022
---------------
+## 3.2 10/07/2022
 When computing AQI, round to nearest integer (rather than truncate).
 
-3.1 08/27/2021
---------------
+## 3.1 08/27/2021
 Switch to 2021 US EPA Correction (see https://www.epa.gov/sites/default/files/2021-05/documents/toolsresourceswebinar_purpleairsmoke_210519b.pdf)
 
-3.0.2 03/23/2021
---------------
+## 3.0.2 03/23/2021
 Fix broken labels for aqi and aqi_color observation types.
 
-3.0.1 12/02/2020
---------------
+## 3.0.1 12/02/2020
 Minor changes when dealing with unavailble values.
 Minor code cleanup.
 
-3.0 10/31/2020
---------------
+## 3.0 10/31/2020
 1. Switch to using the new US EPA correction for PM2.5.  See:
    (https://cfpub.epa.gov/si/si_public_file_download.cfm?p_download_id=539905&Lab=CEMM)
    This correction is always applied.  The LRAPA and UNBC corrections have
@@ -353,39 +325,32 @@ Minor code cleanup.
    If the user wants access to raw PM2.5; or to the LRAPA and UNBC corrections,
    do NOT upgrade to 3.0.
 
-2.1.1 08/30/2020
-----------------
+## 2.1.1 08/30/2020
 1. Tweak to AQI calculations.  Per EPA spec at
-   https://www3.epa.gov/airnow/aqi-technical-assistance-document-sept2018.pdf 
+   https://www3.epa.gov/airnow/aqi-technical-assistance-document-sept2018.pdf
    PM2.5 concentrations need to be truncated to 1 decimal place
    before the AQI is calculated.
 
-2.1 08/29/2020
------------------
+## 2.1 08/29/2020
 1. Add support for LRAPA conversions (useful for wild fires).
    pm2_5_lrapa
    pm2_5_lrapa_aqi
    pm2_5_lrapa_aqi_color
 
-2.0 07/31/2020
------------------
+## 2.0 07/31/2020
 1. Release of weewx-purple.
 2. Purple no longer creates a separate purple.sdb database.
 3. 2.0 Requires the wview_extended schema in WeeWX 4.
 
-2.0.b2 07/31/2020
------------------
+## 2.0.b2 07/31/2020
 1. Fix for $current.pm2_5_aqi_color
-2. Add demo skin at <HTML_ROOT>/purple
+2. Add demo skin at `<HTML_ROOT>/purple`
 
-2.0.b1 07/31/2020
------------------
+## 2.0.b1 07/31/2020
 1. 2.x drops the separate purple database in favor of WeeWX 4's
    new schema that includes air quality fields.  WeeWX 4's
    xtypes feature is used to compute AQI from pm2_5.  This
    works for all cases, including graphing by imagegenerator.
 
-
-1.0 01/18/2020
---------------
+## 1.0 01/18/2020
 Initial release of weewx-purple.

@@ -1819,7 +1819,7 @@ class TestInstallerConfig(unittest.TestCase):
         fallback turns the test green while silently changing what new
         stations get.  Moving the fallback to match the installer is usually
         what preserves behavior; moving the assignment is a deliberate change
-        of default and belongs in changes.txt.  Existing stations are
+        of default and belongs in changes.md.  Existing stations are
         unaffected either way -- their weewx.conf already carries the value
         the installer wrote, and an upgrade never rewrites it.
 
