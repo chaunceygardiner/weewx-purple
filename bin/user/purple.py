@@ -22,6 +22,7 @@ import json
 import logging
 import math
 import requests
+import socket
 import sys
 import threading
 import time
@@ -42,7 +43,7 @@ import weewx
 
 log = logging.getLogger(__name__)
 
-WEEWX_PURPLE_VERSION = "7.2.1"
+WEEWX_PURPLE_VERSION = "7.2.2"
 
 if sys.version_info[0] < 3 or (sys.version_info[0] == 3 and sys.version_info[1] < 7):
     raise weewx.UnsupportedFeature(
@@ -323,10 +324,18 @@ def is_sane(j: Dict[str, Any]) -> Tuple[bool, str]:
 
     return True, ''
 
-def collect_data(hostname, port, timeout, proxy = False):
-    url = 'http://%s:%s/json' % (hostname, port)
+def resolve_hostname(hostname):
+    """The IPv4 address hostname resolves to; an address literal comes back
+    unchanged.  Raises socket.gaierror when the name does not resolve."""
+    return socket.gethostbyname(hostname)
 
+def collect_data(hostname, port, timeout, proxy = False):
     try:
+        # A sensor is fetched by IP, resolved on every read: one that has lost
+        # its WAN drops into setup mode and redirects a request addressed by
+        # name to its own PurpleAir-xxxx.lan name, which nothing here resolves.
+        address = hostname if proxy else resolve_hostname(hostname)
+        url = 'http://%s:%s/json' % (address, port)
         # fetch data
         log.debug('collect_data: fetching from url: %s, timeout: %d' % (url, timeout))
         r = requests.get(url=url, timeout=timeout)

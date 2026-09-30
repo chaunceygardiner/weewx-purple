@@ -29,6 +29,22 @@ description: Log messages, the manual collector harness, and running the hermeti
   configured proxy could answer for that period, so its pm columns were left
   empty.  Logged once per archive record, which is also how a proxy that is
   down makes itself heard for as long as it stays down.
+* `collect_data: Attempt to fetch from: <host> failed: ... Read timed out`
+  every two minutes or so, with good readings in between: the sensor is
+  also registered to send its readings to a third-party server (Weather
+  Underground, for example), and that server is failing.  While each
+  send waits for an answer, about 35 seconds every two minutes, the sensor
+  does not answer on the LAN.  Remove or correct the third-party upload in
+  the sensor's registration.  When weewx-purple reads through a proxy, the
+  timeouts show in the proxy's log instead.  purple-proxy's manual says
+  how to confirm and fix it:
+  [Reads time out every couple of minutes](https://chaunceygardiner.github.io/purple-proxy/troubleshooting#reads-time-out-every-couple-of-minutes).
+* `collect_data: Attempt to fetch from: <host> failed: ... Failed to resolve
+  'purpleair-xxxx.lan'`: the sensor has lost its WAN connection and is in
+  setup mode, redirecting requests addressed by name.  weewx-purple fetches a
+  sensor by IP address, which the sensor answers normally even in setup mode,
+  so this should not appear; if it does, the sensor is redirecting a request
+  addressed by IP, and please report it.
 
 * **The sample report shows the top card but no tiles or hourly strip.**  Those
   need at least one PM2.5 reading recorded for the current day: they are

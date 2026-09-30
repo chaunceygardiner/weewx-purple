@@ -320,6 +320,14 @@ sources are tried.
 A reading is considered fresh for `max(120, 3 * poll_secs)` seconds; stale
 readings are never inserted into loop packets.
 
+A sensor's `hostname` is resolved to its IPv4 address on every read, and the
+sensor is fetched by that address.  This is deliberate: a PurpleAir that has
+lost its WAN connection drops into setup mode, and in that mode it answers a
+request addressed by name with a redirect to its own `PurpleAir-xxxx.lan`
+name, which nothing on the LAN can resolve, while a request addressed by IP
+still gets the reading.  Resolving on every read also means a sensor whose
+address changes is followed at once.  A proxy is fetched by name.
+
 ## Filling gaps after downtime
 
 If at least one `[[ProxyN]]` source is enabled, weewx-purple also fills in

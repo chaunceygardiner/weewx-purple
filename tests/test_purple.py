@@ -12,6 +12,7 @@ import io
 import logging
 import os
 import re
+import socket
 import sqlite3
 import sys
 import threading
@@ -512,7 +513,7 @@ class TestCollectData(unittest.TestCase):
     def test_successful_fetch(self):
         with mock.patch('user.purple.requests.get',
                         return_value=FakeResponse(VALID_PKT.copy())) as m:
-            record = user.purple.collect_data('sensor.example', 80, 10)
+            record = user.purple.collect_data('192.0.2.7', 80, 10)
         m.assert_called_once()
         self.assertIsNotNone(record)
         expected_ts = user.purple.datetime_from_reading(VALID_PKT['DateTime']).timestamp()
@@ -523,19 +524,55 @@ class TestCollectData(unittest.TestCase):
         pkt = VALID_PKT.copy()
         pkt['pm2_5_cf_1'] = 'nan'
         with mock.patch('user.purple.requests.get', return_value=FakeResponse(pkt)):
-            self.assertIsNone(user.purple.collect_data('sensor.example', 80, 10))
+            self.assertIsNone(user.purple.collect_data('192.0.2.7', 80, 10))
 
     def test_connection_error_returns_none(self):
         import requests
         with mock.patch('user.purple.requests.get',
                         side_effect=requests.exceptions.ConnectionError('no route')):
-            self.assertIsNone(user.purple.collect_data('sensor.example', 80, 10))
+            self.assertIsNone(user.purple.collect_data('192.0.2.7', 80, 10))
 
     def test_http_error_returns_none(self):
         import requests
         resp = FakeResponse(None, status_error=requests.exceptions.HTTPError('500'))
         with mock.patch('user.purple.requests.get', return_value=resp):
-            self.assertIsNone(user.purple.collect_data('sensor.example', 80, 10))
+            self.assertIsNone(user.purple.collect_data('192.0.2.7', 80, 10))
+
+    @staticmethod
+    def setup_mode_sensor(url, timeout):
+        """A PurpleAir whose WAN is down: a request addressed by name is
+        redirected to its PurpleAir-xxxx.lan name, which does not resolve;
+        one addressed by IP gets the reading."""
+        import requests
+        host = url.split('/')[2].split(':')[0]
+        if host != '192.0.2.7':
+            raise requests.exceptions.ConnectionError(
+                "Failed to resolve 'purpleair-10c2.lan'")
+        return FakeResponse(VALID_PKT.copy())
+
+    def test_sensor_in_setup_mode_is_read_by_address(self):
+        with mock.patch('user.purple.socket.gethostbyname', return_value='192.0.2.7') as dns, \
+             mock.patch('user.purple.requests.get', side_effect=self.setup_mode_sensor) as get:
+            record = user.purple.collect_data('purple-air', 80, 10)
+        dns.assert_called_once_with('purple-air')
+        self.assertEqual(get.call_args.kwargs['url'], 'http://192.0.2.7:80/json')
+        self.assertIsNotNone(record)
+        self.assertEqual(record['pm2_5_cf_1'], 5.00)
+
+    def test_proxy_is_read_by_name(self):
+        with mock.patch('user.purple.socket.gethostbyname') as dns, \
+             mock.patch('user.purple.requests.get',
+                        return_value=FakeResponse(VALID_PKT.copy())) as get:
+            self.assertIsNotNone(user.purple.collect_data('proxy1', 8000, 1, True))
+        dns.assert_not_called()
+        self.assertEqual(get.call_args.kwargs['url'], 'http://proxy1:8000/json')
+
+    def test_unresolvable_sensor_returns_none(self):
+        with mock.patch('user.purple.socket.gethostbyname',
+                        side_effect=socket.gaierror(-2, 'Name or service not known')), \
+             mock.patch('user.purple.requests.get') as get:
+            self.assertIsNone(user.purple.collect_data('purple-air', 80, 10))
+        get.assert_not_called()
 
 class TestTerminatePassThrough(unittest.TestCase):
     """weewxd stops by raising Terminate from its SIGTERM handler inside
@@ -551,11 +588,11 @@ class TestTerminatePassThrough(unittest.TestCase):
     def test_collect_data_passes_terminate_through(self):
         with mock.patch('user.purple.requests.get', side_effect=Terminate()):
             with self.assertRaises(Terminate):
-                user.purple.collect_data('sensor.example', 80, 10)
+                user.purple.collect_data('192.0.2.7', 80, 10)
 
     def test_collect_data_swallows_other_exceptions(self):
         with mock.patch('user.purple.requests.get', side_effect=RuntimeError('boom')):
-            self.assertIsNone(user.purple.collect_data('sensor.example', 80, 10))
+            self.assertIsNone(user.purple.collect_data('192.0.2.7', 80, 10))
 
     def test_check_type_passes_terminate_through(self):
         class Exploder:

@@ -1,6 +1,19 @@
 # weewx-purple change history
 
-## 7.2.2 (pending)
+## 7.2.2 09/30/2026
+- A sensor is read by IP address rather than by name, as purple-proxy has
+  done since 4.1.  A PurpleAir that has lost its WAN connection drops into
+  setup mode, and in that mode it answers a request addressed by name with a
+  redirect to its own `PurpleAir-xxxx.lan` name, which nothing on the LAN
+  can resolve, so a station reading a sensor directly lost every reading for
+  as long as the WAN was down.  weewx-purple now resolves a sensor's
+  `hostname` itself on every read and fetches that address, which the sensor
+  answers normally in setup mode.  Proxies are still read by name.
+- The manual's troubleshooting page explains read timeouts every two
+  minutes or so: the sensor is also sending its readings to a third-party
+  server, such as Weather Underground, that is failing, and it does not
+  answer on the LAN while each send waits.  The fix is in the sensor's
+  registration; purple-proxy's manual says how to confirm it.
 - When fresh concentrations arrive after an outage, the log line saying so
   now says how long they were missing ("Fresh concentrations available again
   after 13 min."), so an outage can be read whole from that one line,
